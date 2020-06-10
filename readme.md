@@ -213,3 +213,26 @@ Reading data from a backup is pretty simple as well
 ```javascript
 db.read(filePath).then((data) => { db = data })
 ```
+
+#### Other Internals
+
+In Moxley these can be used with any data node:
+
+._root can be used to automatically retrieve a reference the root node of the data structure
+
+```javascript
+node._root
+```
+
+._parent can be used to automatically retrieve a reference to the parent node of any data node
+
+```javascript
+node._parent
+```
+
+._children contains an array of references to all child nodes of a given node
+
+```javascript
+node._children
+node._children[0]
+```
