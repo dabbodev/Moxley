@@ -1,8 +1,14 @@
 const DB = require("./index.js")
 
-var db = new DB()
+var db = new DB("db/").db
+
+console.log(db)
 
 var w = db.store({ test: "test" }, "test")
+
+console.log(w)
+
+console.log(w.test)
 
 db.store({ next: "next" })
 
@@ -20,14 +26,17 @@ var i = db._children[1].queryCollection("list", q)
 
 console.log(w)
 
-//console.log(i)
+console.log(i)
 
 db.backup("backup")
 
-var t = new DB()
+var t = new DB("db/").db
 
 t.read("backup").then((data) => {
     t = data
-    //console.log(t)
+    console.log(t)
 })
 
+var i = db._children[1].queryCollection("list", q)
+
+console.log(i)

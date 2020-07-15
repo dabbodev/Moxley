@@ -2,14 +2,21 @@ var fs = require('fs');
 const {parse, stringify} = require('flatted');
 
 class DB {
-    constructor() {
+    constructor(loc) {
+        if (!fs.existsSync(loc)){
+            fs.mkdirSync(loc)
+        }
+        this._loc = loc
         this._children = []
         this._id = "0"
         this._root = this
+        this._name = "root"
     }
 
+
+
     create(n) {
-        this._children.push(new DN({}, this, n))
+        this._children.push(new WillSmith({}, this, n).dn)
     }
 
     store(o, n=undefined) {
@@ -20,7 +27,9 @@ class DB {
             }
             return a
         } else {
-            return this._children[this._children.push(new DN(o, this, n)) - 1]
+            var i = this._children[this._children.push(new WillSmith({}, this, n).dn) - 1]
+            i.set(o)
+            return i
         }
     }
 
@@ -149,10 +158,12 @@ class DB {
 
 class DN extends DB {
     constructor(o, p, n=undefined) {
-        super()
+        super(p._loc)
+        
         this._parent = p
         this._root = p._root
-        this._id = p._id + "-" + (p._children.length)
+        this._id = p._id + "/" + (p._children.length)
+        this._loc += (p._children.length) + "/"
         if (typeof(o) === "object") {
             var k = Object.keys(o)
             for (var a = 0; a < k.length; a++) {
@@ -166,8 +177,76 @@ class DN extends DB {
             if (!p[n]) {
                 p[n] = this
             }
+        } else {
+            this._name = ""
         }
     }
 }
 
-module.exports = DB
+const handler = {
+    get: function(obj, prop, arg) {
+        if (Reflect.has(obj, prop)) {
+            return Reflect.get(obj, prop, arg)
+        } else {
+            var loc = Reflect.get(obj, "_loc")
+            var filename = loc + prop + ".m"
+            if (fs.existsSync(filename)) {
+                return parse(fs.readFileSync(filename))
+            } else {
+                return undefined
+            }
+        }
+    },
+    set: function(obj, prop, arg) {
+        if (Reflect.has(obj, prop) || typeof(arg) == "function" || arg.constructor.name == "DN") {
+            return Reflect.set(obj, prop, arg)
+        } else {
+            var loc = Reflect.get(obj, "_loc")
+            if (!fs.existsSync(loc)){
+                fs.mkdirSync(loc)
+            }
+            var filename = loc + prop + ".m"
+            fs.writeFileSync(filename, stringify(arg))
+            return true
+        }
+    },
+    apply: function(target, that, args) {
+        return Reflect.apply(target, that, args)
+    },
+    enumerate: function (oTarget, sKey) {
+        return Reflect.enumerate(oTarget, sKey)
+      },
+    ownKeys: function (oTarget, sKey) {
+        return Reflect.ownKeys(oTarget, sKey);
+      },
+      has: function (oTarget, sKey) {
+        return Reflect.has(oTarget, sKey)
+      },
+      getOwnPropertyDescriptor: function (oTarget, sKey) {
+        return Reflect.getOwnPropertyDescriptor(oTarget, sKey)
+      },
+}
+
+class WillSmith {
+    constructor(o, p, n=undefined) {
+        const shadow = new DN(o, p, n)
+
+        const proxy = new Proxy(shadow, handler)
+
+        this.dn = proxy
+    }
+}
+
+
+
+class Lizzo {
+    constructor(loc) {
+        const shadow = new DB(loc)
+
+        const proxy = new Proxy(shadow, handler)
+
+        this.db = proxy
+    }
+}
+
+module.exports = Lizzo

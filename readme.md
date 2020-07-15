@@ -23,10 +23,10 @@ To start using Moxley first require it into your project to access it with:
 const DB = require("moxley-db")
 ```
 
-From here you just need to initialize the main DB node with:
+From here you just need to initialize the main DB node by passing it the path to a folder where it will save your data with:
 
 ```javascript
-var db = new DB()
+var db = new DB(path).db
 ```
 
 And that's it! Moxley is ready for your data!
