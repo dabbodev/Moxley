@@ -101,8 +101,8 @@ class DB {
     }
 
     getById(i) {
-        var a = this._id.split("-")
-        var b = i.split("-")
+        var a = this._id.split("/")
+        var b = i.split("/")
         var s = this
         for (var c = 0; c < b.length; c++) {
             if (a[c]) {
