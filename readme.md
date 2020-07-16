@@ -236,3 +236,9 @@ node._parent
 node._children
 node._children[0]
 ```
+
+._keys contains an array of all currently stored keys in a node
+
+```javascript
+node._keys
+```

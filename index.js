@@ -11,6 +11,7 @@ class DB {
         this._id = "0"
         this._root = this
         this._name = "root"
+        this._keys = []
     }
 
 
@@ -207,6 +208,11 @@ const handler = {
             }
             var filename = loc + prop + ".m"
             fs.writeFileSync(filename, stringify(arg))
+            var k = Reflect.get(obj, "_keys")
+            if (k.indexOf(prop) == -1) {
+                k.push(prop)
+                Reflect.set(obj, "_keys", k)
+            }
             return true
         }
     },
