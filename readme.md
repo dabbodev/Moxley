@@ -69,7 +69,7 @@ var node1 = db.store("apple")
 var node2 = db.store({ fruit: "banana" })
 var nodes = db.store(["pear", "lemon"])
 console.log(node1.data) // "apple"
-console.log(node2.fruit) // "fruit"
+console.log(node2.fruit) // "banana"
 console.log(nodes[0].data, nodes[1].data) // "pear", "lemon"
 ```
 
