@@ -190,23 +190,44 @@ const handler = {
             return Reflect.get(obj, prop, arg)
         } else {
             var loc = Reflect.get(obj, "_loc")
-            var filename = loc + prop + ".m"
+            var filename = loc + prop + ".md"
             if (fs.existsSync(filename)) {
                 return parse(fs.readFileSync(filename))
             } else {
-                return undefined
+                var loc = Reflect.get(obj, "_loc")
+                var filename = loc + prop + ".ml"
+                if (fs.existsSync(filename)) {
+                    return Reflect.get(obj, '_root').getById(String(fs.readFileSync(filename)))
+                } else {
+                    return undefined
+                }
             }
         }
     },
     set: function(obj, prop, arg) {
         if (Reflect.has(obj, prop) || typeof(arg) == "function" || arg.constructor.name == "DN") {
-            return Reflect.set(obj, prop, arg)
+            if (arg.constructor.name == "DN") {
+                var loc = Reflect.get(obj, "_loc")
+                if (!fs.existsSync(loc)){
+                    fs.mkdirSync(loc)
+                }
+                var filename = loc + prop + ".ml"
+                fs.writeFileSync(filename, arg._id)
+                var k = Reflect.get(obj, "_keys")
+                if (k.indexOf(prop) == -1) {
+                    k.push(prop)
+                    Reflect.set(obj, "_keys", k)
+                }
+                return true
+            } else {
+                return Reflect.set(obj, prop, arg)
+            }
         } else {
             var loc = Reflect.get(obj, "_loc")
             if (!fs.existsSync(loc)){
                 fs.mkdirSync(loc)
             }
-            var filename = loc + prop + ".m"
+            var filename = loc + prop + ".md"
             fs.writeFileSync(filename, stringify(arg))
             var k = Reflect.get(obj, "_keys")
             if (k.indexOf(prop) == -1) {

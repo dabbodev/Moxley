@@ -1,10 +1,18 @@
 const DB = require("./index.js")
 
-var db = new DB("db/").db
+var db = new DB("./db/").db
 
 console.log(db)
 
-var w = db.store({ test: "test" }, "test")
+var x = db.store({ test: "test" }, "test")
+
+var y = db.store({ test: "test2" }, "test2")
+
+x.link(y, 'test3')
+
+console.log(x.test3)
+
+/*
 
 console.log(w)
 
@@ -40,3 +48,5 @@ t.read("backup").then((data) => {
 var i = db._children[1].queryCollection("list", q)
 
 console.log(i)
+
+*/
