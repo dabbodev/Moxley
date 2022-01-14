@@ -1,8 +1,26 @@
 const DB = require("./index.js")
 
-var db = new DB("./db/").db
+async function main() {
+    
+    //var db = await new DB("./db/").db._loadFromDir()
+    var db = await new DB("./db/").db
 
-console.log(db)
+    var node1 = db._store(1)
+    var node2 = db._store(2)
+    var node3 = db._store(3)
+
+    var test = db._store("test", "test")
+
+    test._collect(node2, "col", {indexBy: "data", keySort: "(a, b) => { return b - a }"})
+    test._collect(node1, "col")
+    test._collect(node3, "col")
+    console.log(test)
+}
+
+main()
+
+/*
+
 
 var x = db.store({ test: "test" }, "test")
 
@@ -12,7 +30,7 @@ x.link(y, 'test3')
 
 console.log(x.test3)
 
-/*
+
 
 console.log(w)
 
