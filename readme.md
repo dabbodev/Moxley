@@ -216,8 +216,8 @@ console.log(q2[0].fruit) // "orange"
 There are now 2 ways to query a collection! Through querying the Keys stored in memory, or the items in the collection themselves both of which work exactly the same as the query above
 
 ```javascript
-db.collection._queryKeys(name, filter, sort)
-db.collection._queryItems(name, filter, sort)
+db.collection._queryKeys(filter, sort)
+db.collection._queryItems(filter, sort)
 ```
 
 ## Backing Up and Reading Data
