@@ -233,9 +233,6 @@ class DC {
         this._p[n] = this
         this._keys = []
         this._items = []
-        this._keySort = false
-        this._itemSort = false
-        this._indexBy = undefined
         this._keySort = o.keySort
         this._itemSort = o.itemSort
         this._indexBy = o.indexBy
