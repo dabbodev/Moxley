@@ -246,11 +246,11 @@ class DC {
     _add(item) {
         if (!this._indexBy) {
             var x = this._items.push(item) - 1
-            this[x] = this._items[x]
+            this[x] = item
             this._keys.push[x]
         } else {
             var x = item[this._indexBy]
-            this[x] = this._items[x]
+            this[x] = item
             this._keys.push[x]
         }
         if (this._keySort) {
