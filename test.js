@@ -5,21 +5,33 @@ async function main() {
     //var db = await new DB("./db/").db._loadFromDir()
     var db = await new DB("./db/").db
 
-    var node1 = db._store(1)
-    var node2 = db._store(2)
-    var node3 = db._store(3)
+    var node1 = db._create("node1")
+    var node2 = db._create("node2")
 
-    var test = db._store("test", "test")
+    var collection = node2._createCollection("collection", {indexBy:"data"})
+    node1._bind(collection)
 
-    test._collect(node2, "col", {indexBy: "data", keySort: "(a, b) => { return b - a }"})
-    test._collect(node1, "col")
-    test._collect(node3, "col")
-    console.log(test)
+    var child1 = node1._store("child1")
+    var child2 = node1._store("child2")
+    var child3 = node1._store("child3")
+    
+    console.log(collection.child1)
 }
 
 main()
 
 /*
+
+var node1 = db._store(1)
+var node2 = db._store(2)
+var node3 = db._store(3)
+
+var test = db._store("test", "test")
+
+test._collect(node2, "col", {indexBy: "data", keySort: "(a, b) => { return b - a }"})
+test._collect(node1, "col")
+test._collect(node3, "col")
+console.log(test)
 
 
 var x = db.store({ test: "test" }, "test")

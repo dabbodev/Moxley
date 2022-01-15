@@ -9,7 +9,12 @@ class DB {
         this._root = this
         this._name = "root"
         this._keys = []
+        this._bindings = []
         this._scanLocation(loc)
+    }
+
+    _bind(col) {
+        this._bindings.push(col)
     }
 
     async _scanLocation(loc) {
@@ -64,9 +69,21 @@ class DB {
         return this
     }
 
+    _updateBindings(item) {
+        this._bindings.map((b) => { b._add(item) })
+    }
+
     _create(n) {
-        this._children.push(new WillSmith({}, this, n).dn)
+        var i = this._children.push(new WillSmith({}, this, n).dn) - 1
+        this._updateBindings(this._children[i])
         this._saveState()
+        return this._children[i]
+    }
+
+    _createCollection(n, o=undefined) {
+        this[n] = new Tupac(this, n, o).dc
+        this._saveState()
+        return this[n]
     }
 
     _store(o, n=undefined) {
@@ -80,6 +97,7 @@ class DB {
         } else {
             var i = this._children[this._children.push(new WillSmith({}, this, n).dn) - 1]
             i._set(o)
+            this._updateBindings(i)
             this._saveState()
             return i
         }
@@ -209,6 +227,7 @@ class DN extends DB {
 class DC {
     constructor(p, n, o={keySort: undefined, itemSort: undefined, indexBy: undefined}) {
         this._p = p
+        this._root = p._root
         this._name = n
         this._loc = this._p._loc + n + '/'
         this._p[n] = this

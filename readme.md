@@ -138,10 +138,11 @@ console.log(node1.father.firstName) // "Daniel"
 
 #### Collections
 
-Collection are now a unique class object in Moxley! This allows for several benefits in managing collected information! To create a new collection simply use the .collect command
+Collection are now a unique class object in Moxley! This allows for several benefits in managing collected information! To create a new collection simply use the ._collect or ._createCollection commands
 
 ```javascript
 node1._collect(node2, name, options*)
+node1._createCollection(name, options*)
 ```
 
 For Example:
@@ -175,6 +176,23 @@ console.log(customer.fruits["apple"].data) // "apple"
 
 The new keySort and itemSort options accept a string containing a javascript sort function that will execute whenever a new item is added to the collection
 
+#### Binding Collections
+
+You can now bind nodes to collections! This creates an automatically updating link between them so that when a new child is added to the node, it will automatically be passed to the collection! To do this we use the ._bind command
+
+```javascript
+var node1 = db._create("node1")
+var node2 = db._create("node2")
+
+var collection = node2._createCollection("collection", {indexBy:"data"})
+node1._bind(collection)
+
+var child1 = node1._store("child1")
+var child2 = node1._store("child2")
+var child3 = node1._store("child3")
+    
+console.log(node2.collection.child1.data) // child1
+```
 
 #### Node IDs
 
