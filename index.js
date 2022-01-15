@@ -13,8 +13,22 @@ class DB {
         this._scanLocation(loc)
     }
 
+    _findCollection(id) {
+        var sep = id.lastIndexOf('/')
+        var name = id.substring(sep + 1)
+        id = id.substring(0, sep)
+        return this._getById(id)[name]
+    }
+
     _bind(col) {
-        this._bindings.push(col)
+        this._bindings.push(col._id)
+    }
+
+    _unbind(col) {
+        var i = this._bindings.indexOf(col._id)
+        if (i >= 0) {
+            this._bindings.splice(i, 1)
+        }
     }
 
     async _scanLocation(loc) {
@@ -29,7 +43,8 @@ class DB {
             _loc: this._loc,
             _id: this._id,
             _name: this._name,
-            _keys: this._keys
+            _keys: this._keys,
+            _bindings: this._bindings
         }
         var filename = this._loc + "_state.ms"
         fs.writeFileSync(filename, stringify(state))
@@ -47,7 +62,7 @@ class DB {
         if (fs.existsSync(statecheck)) {
             var savedstate = await this._loadState(this._loc)
             this._keys = savedstate._keys
-
+            this._bindings = savedstate._bindings
             var entries = fs.readdirSync(loc)
             
             for (var a = 0; a < entries.length; a++) {
@@ -70,7 +85,7 @@ class DB {
     }
 
     _updateBindings(item) {
-        this._bindings.map((b) => { b._add(item) })
+        this._bindings.map((b) => { this._root._findCollection(b)._add(item) })
     }
 
     _create(n) {
@@ -230,6 +245,7 @@ class DC {
         this._root = p._root
         this._name = n
         this._loc = this._p._loc + n + '/'
+        this._id = this._p._id + '/' + this._name
         this._p[n] = this
         this._keys = []
         this._items = []
@@ -337,6 +353,13 @@ class DC {
 
 const handler = {
     get: function(obj, prop, arg) {
+        if (obj.constructor.name == "DC") {
+            var k = Reflect.get(obj, "_keys").length
+            var i = Reflect.get(obj, "_items").length
+            if (k > i) {
+                Reflect.get(obj, "_populate")
+            }
+        }
         if (Reflect.has(obj, prop)) {
             return Reflect.get(obj, prop, arg)
         } else {
@@ -363,21 +386,25 @@ const handler = {
             }
         }
         if (Reflect.has(obj, prop) || typeof(arg) == "function" || pass == true) {
-            if (arg.constructor.name == "DN") {
-                var loc = Reflect.get(obj, "_loc")
-                if (!fs.existsSync(loc)){
-                    fs.mkdirSync(loc)
+            if (arg) {
+                if (arg.constructor.name == "DN") {
+                    var loc = Reflect.get(obj, "_loc")
+                    if (!fs.existsSync(loc)){
+                        fs.mkdirSync(loc)
+                    }
+                    var filename = loc + prop + ".ml"
+                    fs.writeFileSync(filename, arg._id)
+                    var k = Reflect.get(obj, "_keys")
+                    if (k.indexOf(prop) == -1) {
+                        k.push(prop)
+                        Reflect.set(obj, "_keys", k)
+                    }
+                    return true
+                } else {
+                    return Reflect.set(obj, prop, arg)
                 }
-                var filename = loc + prop + ".ml"
-                fs.writeFileSync(filename, arg._id)
-                var k = Reflect.get(obj, "_keys")
-                if (k.indexOf(prop) == -1) {
-                    k.push(prop)
-                    Reflect.set(obj, "_keys", k)
-                }
-                return true
             } else {       
-                return Reflect.set(obj, prop, arg)
+                return Reflect.set(obj, prop)
             }
         } else {
             var loc = Reflect.get(obj, "_loc")

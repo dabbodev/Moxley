@@ -3,6 +3,8 @@ const DB = require("./index.js")
 async function main() {
     
     //var db = await new DB("./db/").db._loadFromDir()
+
+    
     var db = await new DB("./db/").db
 
     var node1 = db._create("node1")
@@ -13,9 +15,12 @@ async function main() {
 
     var child1 = node1._store("child1")
     var child2 = node1._store("child2")
+
+    node1._unbind(collection)
+
     var child3 = node1._store("child3")
     
-    console.log(collection.child1)
+    console.log(db.node2.collection)
 }
 
 main()

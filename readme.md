@@ -176,6 +176,8 @@ console.log(customer.fruits["apple"].data) // "apple"
 
 The new keySort and itemSort options accept a string containing a javascript sort function that will execute whenever a new item is added to the collection
 
+You can also find a collection by passing it's string form ._id parameter to the ._findCollection function of a root node
+
 #### Binding Collections
 
 You can now bind nodes to collections! This creates an automatically updating link between them so that when a new child is added to the node, it will automatically be passed to the collection! To do this we use the ._bind command
@@ -192,6 +194,27 @@ var child2 = node1._store("child2")
 var child3 = node1._store("child3")
     
 console.log(node2.collection.child1.data) // child1
+```
+
+You can also unbind a node from a collection by using ._unbind
+
+```javascript
+var db = await new DB("./db/").db
+
+var node1 = db._create("node1")
+var node2 = db._create("node2")
+
+var collection = node2._createCollection("collection", {indexBy:"data"})
+node1._bind(collection)
+
+var child1 = node1._store("child1")
+var child2 = node1._store("child2")
+
+node1._unbind(collection)
+
+var child3 = node1._store("child3")
+    
+console.log(collection._keys) // ["child1", "child2"]
 ```
 
 #### Node IDs
@@ -245,15 +268,6 @@ Moxley now loads itself automatically using the data created from previous sessi
 ```javascript
 var db = await new DB("./db/").db._loadFromDir()
 ```
-
-The one thing to keep in mind is because of loading order, collections must be populated after loading from a directory to access the references stored in the collection. 
-To do this we use ._populate command on the collection object
-
-```javascript
-db.collection._populate()
-```
-
-And then all your references in the collection will be accessible again!
 
 #### Other Internals
 
