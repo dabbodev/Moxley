@@ -10,6 +10,8 @@ class DB {
         this._name = "root"
         this._keys = []
         this._bindings = []
+        this._template = undefined
+        this._childTemplate = undefined
         this._scanLocation(loc)
     }
 
@@ -46,6 +48,12 @@ class DB {
             _keys: this._keys,
             _bindings: this._bindings
         }
+        if (this._childTemplate) {
+            state._childTemplate = this._childTemplate.toString()
+        }
+        if (this._template) {
+            state._template = this._template.toString()
+        }
         var filename = this._loc + "_state.ms"
         fs.writeFileSync(filename, stringify(state))
     }
@@ -63,6 +71,13 @@ class DB {
             var savedstate = await this._loadState(this._loc)
             this._keys = savedstate._keys
             this._bindings = savedstate._bindings
+            if (savedstate._childTemplate) {
+                this._childTemplate = parse(savedstate._childTemplate)
+            }
+            if (savedstate._template) {
+                this._template = parse(savedstate._template)
+            }
+
             var entries = fs.readdirSync(loc)
             
             for (var a = 0; a < entries.length; a++) {
@@ -89,16 +104,37 @@ class DB {
     }
 
     _create(n) {
-        var i = this._children.push(new WillSmith({}, this, n).dn) - 1
-        this._updateBindings(this._children[i])
+        var i = this._children[this._children.push(new WillSmith({}, this, n).dn) - 1]
+        if (this._childTemplate) {
+            i._template = this._childTemplate
+            i._initTemplate()
+        }
+        this._updateBindings(i)
         this._saveState()
-        return this._children[i]
+        return i
     }
 
     _createCollection(n, o=undefined) {
         this[n] = new Tupac(this, n, o).dc
         this._saveState()
         return this[n]
+    }
+
+    _createTemplate(o) {
+        this._childTemplate = new DT(o)
+    }
+
+    _initTemplate() {
+        var k = Object.keys(this._template.keys)
+        k.map((key) => { 
+            var d = this._template.keys[key].default 
+            if (typeof(d) == "function") {
+                this[key] = eval(this._template.keys[key].default)()
+            } else {
+                this[key] = this._template.keys[key].default 
+            }
+        })
+        this._saveState()
     }
 
     _store(o, n=undefined) {
@@ -111,6 +147,10 @@ class DB {
             return a
         } else {
             var i = this._children[this._children.push(new WillSmith({}, this, n).dn) - 1]
+            if (this._childTemplate) {
+                i._template = this._childTemplate
+                i._initTemplate()
+            }
             i._set(o)
             this._updateBindings(i)
             this._saveState()
@@ -350,8 +390,31 @@ class DC {
     
 }
 
+class DT {
+    constructor(o) {
+        var k = Object.keys(o)
+        k.map((key) => { this[key] = o[key] })
+    }
+
+    toString() {
+        var out = {}
+        var k = Object.keys(this)
+        k.map((key) => { 
+            if (typeof(this[key]) == "function") {
+                out[key] = this[key].toString() 
+            } else {
+                out[key] = this[key]
+            }
+        })
+        return stringify(this)
+    }
+}
+
 const handler = {
     get: function(obj, prop, arg) {
+        if (prop.constructor.name == "Symbol") {
+            console.log("sym", prop.toString(), prop.description)
+        }
         var loc = Reflect.get(obj, "_loc")
         if (obj.constructor.name == "DC") {
             var k = Reflect.get(obj, "_keys").length
@@ -363,6 +426,7 @@ const handler = {
         if (Reflect.has(obj, prop)) {
             return Reflect.get(obj, prop, arg)
         } else {
+            //console.log(loc, prop, obj, arg)
             var filename = loc + prop + ".md"
             if (fs.existsSync(filename)) {
                 return parse(fs.readFileSync(filename))
@@ -374,7 +438,7 @@ const handler = {
             filename = loc + prop + ".mf"
             if (fs.existsSync(filename)) {
                 return eval(String(fs.readFileSync(filename)))
-            } 
+            }
             return undefined
         }
     },
@@ -385,7 +449,7 @@ const handler = {
         }
         var pass = false
         if (arg) {
-            if (arg.constructor.name == "DN" || arg.constructor.name == "DC") {
+            if (arg.constructor.name == "DN" || arg.constructor.name == "DC" || arg.constructor.name == "DT") {
                 pass = true
             }
         }
@@ -398,6 +462,19 @@ const handler = {
                 Reflect.set(obj, "_keys", k)
             }
             return true
+        }
+        if (Reflect.get(obj, "_template")) {
+            var template = obj._template.keys
+            console.log(prop, template)
+            if (template[prop]) {
+                if (arg.constructor.name != template[prop].type) {
+                    console.log("Invalid type " + arg.constructor.name + " set to parameter " + prop + ". Expected " + template[prop].type)
+                    return false
+                }
+            } else if (obj._template.strict == true) {
+                console.log("Strict template enabled, no new keys allowed")
+                return false
+            }
         }
         if (Reflect.has(obj, prop) || pass == true) {
             if (arg) {

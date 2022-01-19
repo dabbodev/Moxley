@@ -4,25 +4,60 @@ async function main() {
     
     //var db = await new DB("./db/").db._loadFromDir()
 
-    
-    var db = await new DB("./db/").db
+    var db = new DB("./db/").db
 
     var node1 = db._create("node1")
 
-    var increment = (x) => {return x+1}
+    node1._createTemplate({
+        strict: true,
+        keys: {
+            counter: {
+                type: "Number",
+                default: 1
+            }
+        }
+    })
 
-    node1._set(1, "counter")
-    console.log(node1.counter)
+    var node2 = node1._create("node2")
 
-    node1._set(increment, "increment")
-        
-    node1.counter = node1.increment(node1.counter)
-    console.log(node1.counter)
+    node2.test = "test" // "Strict template enabled, no new keys allowed"
+    
 }
 
 main()
 
 /*
+var node1 = db._create("node1")
+
+node1._createTemplate({
+    strict: false,
+    keys: {
+        counter: {
+            type: "Number",
+            default: 1
+        }
+    }
+})
+
+var node2 = node1._create("node2")
+
+console.log(node2.counter) // 1
+
+node2.counter = "test" // "Invalid type String set to parameter test. Expected Number"
+
+console.log(node2.counter) // 1
+
+var node1 = db._create("node1")
+
+var increment = (x) => {return x+1}
+
+node1._set(1, "counter")
+console.log(node1.counter)
+
+node1._set(increment, "increment")
+    
+node1.counter = node1.increment(node1.counter)
+console.log(node1.counter)
 
 var node1 = db._store(1)
 var node2 = db._store(2)

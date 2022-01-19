@@ -128,6 +128,76 @@ node1.counter = node1.increment(node1.counter)
 console.log(node1.counter) // 2
 ```
 
+#### Templates
+
+Moxley can now use templates to enforce rules on nodes! Simply use the ._createTemplate function on a node and all nodes generated from it will have the template applied. Usage of the template follows 2 main parameters: strict, and keys. Setting strict to "true" will stop the node from creating any new keys other than the ones supplied in the template. The keys object should contain a list of the keys you want each child node to start with, as well as the typing and default parameters for the key. Setting the default value of a key to a function will run the function when the child is created. Here are some examples:
+
+Setting a default key and value
+```javascript
+var node1 = db._create("node1")
+
+node1._createTemplate({
+    strict: false,
+    keys: {
+        counter: {
+            type: "Number",
+            default: 1
+        }
+    }
+})
+
+var node2 = node1._create("node2")
+
+console.log(node2.counter) // 1
+
+node2.counter = "test" // "Invalid type String set to parameter test. Expected Number"
+
+console.log(node2.counter) // 1
+```
+
+Using a function to initialize a value at creation
+```javascript
+var node1 = db._create("node1")
+
+node1._createTemplate({
+    strict: false,
+    keys: {
+        createdDate: {
+            type: "Date",
+            default: () => { return new Date() }
+        }
+    }
+})
+
+var node2 = node1._create("node2")
+
+console.log(node2.createdDate) // date at creation
+
+node2.createdDate = "test" // "Invalid type set to parameter test. Expected Date"
+
+console.log(node2.createdDate) // date at creation
+```
+
+Using strict mode to block new keys
+```javascript
+var node1 = db._create("node1")
+
+node1._createTemplate({
+    strict: true,
+    keys: {
+        counter: {
+            type: "Number",
+            default: 1
+        }
+    }
+})
+
+var node2 = node1._create("node2")
+
+node2.test = "test" // "Strict template enabled, no new keys allowed"
+```
+
+
 #### Links
 
 In Moxley, you can create references to any node at any scope of the structure with the link function. If you don't have an active reference to a node to pass to the link function, passing the _id string of a node will work as well.
