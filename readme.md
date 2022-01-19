@@ -110,6 +110,24 @@ console.log(node2.fruit) // "banana"
 console.log(node3.fruits) // ["pear", "lemon"]
 ```
 
+#### Storing Functions
+
+Moxley can save a function to any key just like any other piece of data, and then let's you call it from that key at any time
+
+```javascript
+var node1 = db._create("node1")
+
+var increment = (x) => {return x+1}
+
+node1._set(1, "counter")
+console.log(node1.counter)
+
+node1._set(increment, "increment")
+    
+node1.counter = node1.increment(node1.counter)
+console.log(node1.counter)
+```
+
 #### Links
 
 In Moxley, you can create references to any node at any scope of the structure with the link function. If you don't have an active reference to a node to pass to the link function, passing the _id string of a node will work as well.

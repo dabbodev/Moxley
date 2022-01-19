@@ -8,19 +8,16 @@ async function main() {
     var db = await new DB("./db/").db
 
     var node1 = db._create("node1")
-    var node2 = db._create("node2")
 
-    var collection = node2._createCollection("collection", {indexBy:"data"})
-    node1._bind(collection)
+    var increment = (x) => {return x+1}
 
-    var child1 = node1._store("child1")
-    var child2 = node1._store("child2")
+    node1._set(1, "counter")
+    console.log(node1.counter)
 
-    node1._unbind(collection)
-
-    var child3 = node1._store("child3")
-    
-    console.log(db.node2.collection)
+    node1._set(increment, "increment")
+        
+    node1.counter = node1.increment(node1.counter)
+    console.log(node1.counter)
 }
 
 main()

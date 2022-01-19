@@ -202,7 +202,6 @@ class DB {
     }
 
     _link(i, n) {
-        console.log("link")
         if (typeof(i) == "string") {
             i = this._root._getById(i)
         }
@@ -353,6 +352,7 @@ class DC {
 
 const handler = {
     get: function(obj, prop, arg) {
+        var loc = Reflect.get(obj, "_loc")
         if (obj.constructor.name == "DC") {
             var k = Reflect.get(obj, "_keys").length
             var i = Reflect.get(obj, "_items").length
@@ -363,35 +363,45 @@ const handler = {
         if (Reflect.has(obj, prop)) {
             return Reflect.get(obj, prop, arg)
         } else {
-            var loc = Reflect.get(obj, "_loc")
             var filename = loc + prop + ".md"
             if (fs.existsSync(filename)) {
                 return parse(fs.readFileSync(filename))
-            } else {
-                var loc = Reflect.get(obj, "_loc")
-                var filename = loc + prop + ".ml"
-                if (fs.existsSync(filename)) {
-                    return Reflect.get(obj, '_root')._getById(String(fs.readFileSync(filename)))
-                } else {
-                    return undefined
-                }
             }
+            filename = loc + prop + ".ml"
+            if (fs.existsSync(filename)) {
+                return Reflect.get(obj, '_root')._getById(String(fs.readFileSync(filename)))
+            } 
+            filename = loc + prop + ".mf"
+            if (fs.existsSync(filename)) {
+                return eval(String(fs.readFileSync(filename)))
+            } 
+            return undefined
         }
     },
     set: function(obj, prop, arg) {
+        var loc = Reflect.get(obj, "_loc")
+        if (!fs.existsSync(loc)){
+            fs.mkdirSync(loc)
+        }
         var pass = false
         if (arg) {
             if (arg.constructor.name == "DN" || arg.constructor.name == "DC") {
                 pass = true
             }
         }
-        if (Reflect.has(obj, prop) || typeof(arg) == "function" || pass == true) {
+        if (typeof(arg) == "function" && !Reflect.has(obj, prop)) {
+            var filename = loc + prop + ".mf"
+            fs.writeFileSync(filename, arg.toString())
+            var k = Reflect.get(obj, "_keys")
+            if (k.indexOf(prop) == -1) {
+                k.push(prop)
+                Reflect.set(obj, "_keys", k)
+            }
+            return true
+        }
+        if (Reflect.has(obj, prop) || pass == true) {
             if (arg) {
                 if (arg.constructor.name == "DN") {
-                    var loc = Reflect.get(obj, "_loc")
-                    if (!fs.existsSync(loc)){
-                        fs.mkdirSync(loc)
-                    }
                     var filename = loc + prop + ".ml"
                     fs.writeFileSync(filename, arg._id)
                     var k = Reflect.get(obj, "_keys")
@@ -407,14 +417,9 @@ const handler = {
                 return Reflect.set(obj, prop)
             }
         } else {
-            var loc = Reflect.get(obj, "_loc")
-            if (!fs.existsSync(loc)){
-                fs.mkdirSync(loc)
-            }
             var filename = loc + prop + ".md"
             fs.writeFileSync(filename, stringify(arg))
             var k = Reflect.get(obj, "_keys")
-            console.log(obj, k)
             if (k.indexOf(prop) == -1) {
                 k.push(prop)
                 Reflect.set(obj, "_keys", k)
