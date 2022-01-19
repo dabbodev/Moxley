@@ -120,12 +120,12 @@ var node1 = db._create("node1")
 var increment = (x) => {return x+1}
 
 node1._set(1, "counter")
-console.log(node1.counter)
+console.log(node1.counter)  // 1
 
 node1._set(increment, "increment")
     
 node1.counter = node1.increment(node1.counter)
-console.log(node1.counter)
+console.log(node1.counter) // 2
 ```
 
 #### Links
