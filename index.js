@@ -72,10 +72,10 @@ class DB {
             this._keys = savedstate._keys
             this._bindings = savedstate._bindings
             if (savedstate._childTemplate) {
-                this._childTemplate = parse(savedstate._childTemplate)
+                this._childTemplate = new DT(parse(savedstate._childTemplate))
             }
             if (savedstate._template) {
-                this._template = parse(savedstate._template)
+                this._template = new DT(parse(savedstate._template))
             }
 
             var entries = fs.readdirSync(loc)
@@ -129,7 +129,8 @@ class DB {
         k.map((key) => { 
             var d = this._template.keys[key].default 
             if (typeof(d) == "function") {
-                this[key] = eval(this._template.keys[key].default)()
+                var t = eval(this._template.keys[key].default).bind(this)
+                this[key] = Reflect.apply(t, this, [])
             } else {
                 this[key] = this._template.keys[key].default 
             }
@@ -339,6 +340,10 @@ class DC {
             var x = this._keys.indexOf(item[this._indexBy])
             this._keys.splice(x, 1)
             this._items.splice(x, 1)
+        } else {
+            var x = this._items.indexOf(item)
+            this._keys.splice(x, 1)
+            this._items.splice(x, 1)
         }
     }
 
@@ -412,9 +417,6 @@ class DT {
 
 const handler = {
     get: function(obj, prop, arg) {
-        if (prop.constructor.name == "Symbol") {
-            console.log("sym", prop.toString(), prop.description)
-        }
         var loc = Reflect.get(obj, "_loc")
         if (obj.constructor.name == "DC") {
             var k = Reflect.get(obj, "_keys").length
@@ -465,7 +467,6 @@ const handler = {
         }
         if (Reflect.get(obj, "_template")) {
             var template = obj._template.keys
-            console.log(prop, template)
             if (template[prop]) {
                 if (arg.constructor.name != template[prop].type) {
                     console.log("Invalid type " + arg.constructor.name + " set to parameter " + prop + ". Expected " + template[prop].type)

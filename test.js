@@ -8,19 +8,22 @@ async function main() {
 
     var node1 = db._create("node1")
 
+    node1.counter = 0
+
     node1._createTemplate({
         strict: true,
         keys: {
             counter: {
                 type: "Number",
-                default: 1
+                default: function() { this._parent.counter += 1 ; return this._parent.counter }
             }
         }
     })
 
     var node2 = node1._create("node2")
+    var node3 = node1._create("node3")
 
-    node2.test = "test" // "Strict template enabled, no new keys allowed"
+    console.log(node1.counter, node2.counter, node3.counter)
     
 }
 
