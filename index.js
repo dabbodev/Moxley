@@ -135,8 +135,10 @@ class DB {
                 this[key] = this._template.keys[key].default 
             }
         })
-        var t = eval(this._template.apply).bind(this)
-        Reflect.apply(t, this, [])
+        if (this._template.apply) {
+            var t = eval(this._template.apply).bind(this)
+            Reflect.apply(t, this, [])
+        }
         this._saveState()
     }
 

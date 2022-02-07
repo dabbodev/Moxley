@@ -15,9 +15,6 @@ async function main() {
                 type: "Number",
                 default: 0
             }
-        },
-        apply: () => {
-            this.counter++
         }
     })
 
