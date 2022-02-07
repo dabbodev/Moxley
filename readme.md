@@ -130,7 +130,7 @@ console.log(node1.counter) // 2
 
 #### Templates
 
-Moxley can now use templates to enforce rules on nodes! Simply use the ._createTemplate function on a node and all nodes generated from it will have the template applied. Usage of the template follows 2 main parameters: strict, and keys. Setting strict to "true" will stop the node from creating any new keys other than the ones supplied in the template. The keys object should contain a list of the keys you want each child node to start with, as well as the typing and default parameters for the key. Setting the default value of a key to a function will run the function when the child is created. Here are some examples:
+Moxley can now use templates to enforce rules on nodes! Simply use the ._createTemplate function on a node and all nodes generated from it will have the template applied. Usage of the template follows 3 main parameters: strict, keys, and apply. Setting strict to "true" will stop the node from creating any new keys other than the ones supplied in the template. The keys object should contain a list of the keys you want each child node to start with, as well as the typing and default parameters for the key. Setting the default value of a key to a function will run the function when the child is created. Moxley now also has an apply template parameter that will run as a function on the child at creation using the child as the this scope for the activation. Here are some examples:
 
 Setting a default key and value
 ```javascript
@@ -197,6 +197,26 @@ var node2 = node1._create("node2")
 node2.test = "test" // "Strict template enabled, no new keys allowed"
 ```
 
+Using apply to affect a child at creation
+```javascript
+var node1 = db._create("node1")
+
+    node1._createTemplate({
+        strict: false,
+        keys: {
+            counter: {
+                type: "Number",
+                default: 0
+            }
+        },
+        apply: () => {
+            this.counter++
+        }
+    })
+
+    var node2 = node1._create("node2")
+    console.log(node2.counter) // 1
+```
 
 #### Links
 

@@ -135,6 +135,8 @@ class DB {
                 this[key] = this._template.keys[key].default 
             }
         })
+        var t = eval(this._template.apply).bind(this)
+        Reflect.apply(t, this, [])
         this._saveState()
     }
 
@@ -391,14 +393,18 @@ class DC {
             
         }
     }
-
-    
 }
 
 class DT {
     constructor(o) {
         var k = Object.keys(o)
-        k.map((key) => { this[key] = o[key] })
+        k.map((key) => { 
+            if (typeof(o[key]) == "function") {
+                this[key] = o[key].toString() 
+            } else {
+                this[key] = o[key]
+            } 
+        })
     }
 
     toString() {
@@ -428,7 +434,6 @@ const handler = {
         if (Reflect.has(obj, prop)) {
             return Reflect.get(obj, prop, arg)
         } else {
-            //console.log(loc, prop, obj, arg)
             var filename = loc + prop + ".md"
             if (fs.existsSync(filename)) {
                 return parse(fs.readFileSync(filename))
@@ -439,7 +444,8 @@ const handler = {
             } 
             filename = loc + prop + ".mf"
             if (fs.existsSync(filename)) {
-                return eval(String(fs.readFileSync(filename)))
+                var t = eval(String(fs.readFileSync(filename))).bind(obj)
+                return t
             }
             return undefined
         }

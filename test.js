@@ -8,23 +8,21 @@ async function main() {
 
     var node1 = db._create("node1")
 
-    node1.counter = 0
-
     node1._createTemplate({
-        strict: true,
+        strict: false,
         keys: {
             counter: {
                 type: "Number",
-                default: function() { this._parent.counter += 1 ; return this._parent.counter }
+                default: 0
             }
+        },
+        apply: () => {
+            this.counter++
         }
     })
 
     var node2 = node1._create("node2")
-    var node3 = node1._create("node3")
-
-    console.log(node1.counter, node2.counter, node3.counter)
-    
+    console.log(node2.counter)
 }
 
 main()
