@@ -1,7 +1,7 @@
 
 # Moxley
 
-Moxley is a flexible and lightweight class based database system that can scale to any size or complexity. Moxley uses in-memory references to chain nodes together in any pattern allowing you to get what you need when you need it. Moxley only stores and index of linked keys to your data in local memory, and acts as a proxy of itself to read and write the data to the file system in real time. This means that other than the structure itself, Moxley only loads the data actively being used into RAM. 
+Moxley is a flexible and lightweight class based database system that can scale to any size or complexity. Moxley uses in-memory references to chain nodes together in any pattern allowing you to get what you need when you need it. Moxley only stores an index of linked keys to your data in local memory, and acts as a proxy of itself to read and write the data to the file system in real time. This means that other than the structure itself, Moxley only loads the data actively being used into RAM. 
 
 ## Installation
 
@@ -201,21 +201,21 @@ Using apply to affect a child at creation
 ```javascript
 var node1 = db._create("node1")
 
-    node1._createTemplate({
-        strict: false,
-        keys: {
-            counter: {
-                type: "Number",
-                default: 0
-            }
-        },
-        apply: () => {
-            this.counter++
+node1._createTemplate({
+    strict: false,
+    keys: {
+        counter: {
+            type: "Number",
+            default: 0
         }
-    })
+    },
+    apply: () => {
+        this.counter++
+    }
+})
 
-    var node2 = node1._create("node2")
-    console.log(node2.counter) // 1
+var node2 = node1._create("node2")
+console.log(node2.counter) // 1
 ```
 
 #### Links
@@ -269,7 +269,7 @@ node1._pull(node2, name)
 node1.name._pull(node2)
 ```
 
-Along with the new Collections interface there are 3 new persistent options for Collections: indexBy, keySort, and itemSort. Without supplying these options, the collection will operate as a normal collection under default conditions but using these allows us to configure automatic sorting within the collection.
+Collections now have 4 persistent options: indexBy, keySort, itemSort, and accept. Without supplying these options, the collection will operate as a normal collection under default conditions but using these allows us to configure automatic sorting within the collection.
 
 The indexBy option accepts a string containing the a key from the objects in the collection to use as the main index of the collection. All objects in the collection will then be available through the collection's key interface
 
@@ -282,7 +282,27 @@ customer._collect(fruits, "fruits", {indexBy: "data"})
 console.log(customer.fruits["apple"].data) // "apple"
 ```
 
-The new keySort and itemSort options accept a string containing a javascript sort function that will execute whenever a new item is added to the collection
+The accept option allows us to supply a conditional requirement for an item to be added to the collection
+
+```javascript
+var db = new DB("./db/").db
+
+var node1 = db._create("node1")
+
+var node2 = db._create("node2")
+
+node2._createCollection("collection", {accept: (item) => { return item.data == "accepted" }})
+
+node1._bind(node2.collection)
+
+var child1 = node1._store("rejected")
+
+var child2 = node1._store("accepted")
+
+console.log(node2.collection[0].data) // "accepted"
+```
+
+The keySort and itemSort options accept a string containing a javascript sort function that will execute whenever a new item is added to the collection
 
 You can also find a collection by passing it's string form ._id parameter to the ._findCollection function of a root node
 
@@ -387,7 +407,7 @@ In Moxley these can be used with any data node:
 node._root
 ```
 
-._parent can be used to automatically retrieve a reference to the parent node of any data node
+._parent can be used to automatically retrieve a reference to the parent node of any data node, also works with collections
 
 ```javascript
 node._parent
@@ -400,8 +420,15 @@ node._children
 node._children[0]
 ```
 
-._keys contains an array of all currently stored keys in a node
+._keys contains an array of all currently stored keys in a node, also works with collections
 
 ```javascript
 node._keys
+```
+
+._items contains an array of all items linked to a collection
+
+```javascript
+collection._items
+collection._items[0]
 ```

@@ -282,18 +282,19 @@ class DN extends DB {
 }
 
 class DC {
-    constructor(p, n, o={keySort: undefined, itemSort: undefined, indexBy: undefined}) {
-        this._p = p
+    constructor(p, n, o={keySort: undefined, itemSort: undefined, indexBy: undefined, accept: undefined}) {
+        this._parent = p
         this._root = p._root
         this._name = n
-        this._loc = this._p._loc + n + '/'
-        this._id = this._p._id + '/' + this._name
-        this._p[n] = this
+        this._loc = this._parent._loc + n + '/'
+        this._id = this._parent._id + '/' + this._name
+        this._parent[n] = this
         this._keys = []
         this._items = []
         this._keySort = o.keySort
         this._itemSort = o.itemSort
         this._indexBy = o.indexBy
+        this._accept = o.accept
         if (!fs.existsSync(this._loc)){
             fs.mkdirSync(this._loc)
         } else {
@@ -318,6 +319,11 @@ class DC {
     }
 
     _add(item) {
+        if (this._accept) {
+            if (!this._accept(item)) {
+                return false
+            }
+        }
         if (!this._indexBy) {
             var x = this._items.push(item) - 1
             this[x] = item
@@ -354,7 +360,7 @@ class DC {
             var k = this._keys[a]
             var f = this._loc + k + '.ml'
             var id = String(fs.readFileSync(f))
-            var item = this._p._root.getById(id)
+            var item = this._parent._root.getById(id)
             var x = this._items.push(item) - 1
             this[k] = this._items[x]
         }

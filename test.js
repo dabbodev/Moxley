@@ -8,18 +8,17 @@ async function main() {
 
     var node1 = db._create("node1")
 
-    node1._createTemplate({
-        strict: false,
-        keys: {
-            counter: {
-                type: "Number",
-                default: 0
-            }
-        }
-    })
+    var node2 = db._create("node2")
+    
+    node2._createCollection("collection", {accept: (item) => { return item.data == "accepted" }})
 
-    var node2 = node1._create("node2")
-    console.log(node2.counter)
+    node1._bind(node2.collection)
+
+    var child1 = node1._store("rejected")
+
+    var child2 = node1._store("accepted")
+
+    console.log(node2.collection[0].data) // "accepted"
 }
 
 main()
