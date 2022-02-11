@@ -51,9 +51,6 @@ class DB {
         if (this._childTemplate) {
             state._childTemplate = this._childTemplate.toString()
         }
-        if (this._template) {
-            state._template = this._template.toString()
-        }
         var filename = this._loc + "_state.ms"
         fs.writeFileSync(filename, stringify(state))
     }
@@ -74,10 +71,11 @@ class DB {
             if (savedstate._childTemplate) {
                 this._childTemplate = new DT(parse(savedstate._childTemplate))
             }
-            if (savedstate._template) {
-                this._template = new DT(parse(savedstate._template))
+            if (this._parent) {
+                if (this._parent._childTemplate) {
+                    this._template = this._parent._childTemplate
+                }
             }
-
             var entries = fs.readdirSync(loc)
             
             for (var a = 0; a < entries.length; a++) {

@@ -1,7 +1,7 @@
 
 # Moxley
 
-Moxley is a flexible and lightweight class based database system that can scale to any size or complexity. Moxley uses in-memory references to chain nodes together in any pattern allowing you to get what you need when you need it.
+Moxley is a flexible and lightweight class based database system that can scale to any size or complexity. Moxley uses in-memory references to chain nodes together in any pattern allowing you to get what you need when you need it. Moxley only stores and index of linked keys to your data in local memory, and acts as a proxy of itself to read and write the data to the file system in real time. This means that other than the structure itself, Moxley only loads the data actively being used into RAM. 
 
 ## Installation
 

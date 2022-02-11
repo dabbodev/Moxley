@@ -1,6 +1,6 @@
 {
   "name": "moxley-db",
-  "version": "3.0.4",
+  "version": "3.0.5",
   "description": "A flexible class based database system for complicated schemas",
   "main": "index.js",
   "scripts": {
