@@ -404,7 +404,7 @@ class DC {
 class DT {
     constructor(o) {
         this.strict = o.strict ? o.strict : false
-        this.apply = o.apply ? o.apply : undefined
+        this.apply = o.apply ? o.apply.toString() : undefined
         this.keys = {}
         var k = Object.keys(o.keys)
         k.map((key) => { 
