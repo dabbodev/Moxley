@@ -374,10 +374,13 @@ class DC {
             _indexBy: this._indexBy
         }
         if (this._keySort) { 
-            state._keySort = this._keySort
+            state._keySort = this._keySort.toString()
         }
         if (this._itemSort) { 
-            state._itemSort = this._itemSort
+            state._itemSort = this._itemSort.toString()
+        }
+        if (this._accept) { 
+            state._accept = this._accept.toString()
         }
         var filename = this._loc + "_colstate.mc"
         fs.writeFileSync(filename, stringify(state))
@@ -390,10 +393,13 @@ class DC {
             this._name = savedstate._name
             this._keys = savedstate._keys
             if (savedstate._keySort) { 
-                this._keySort = savedstate._keySort
+                this._keySort = eval(savedstate._keySort)
             }
             if (savedstate._itemSort) { 
-                this._itemSort = savedstate._itemSort
+                this._itemSort = eval(savedstate._itemSort)
+            }
+            if (savedstate._accept) { 
+                this._accept = eval(savedstate._accept)
             }
             this._indexBy = savedstate._indexBy
             
