@@ -130,7 +130,7 @@ console.log(node1.counter) // 2
 
 #### Templates
 
-Moxley can now use templates to enforce rules on nodes! Simply use the ._createTemplate function on a node and all nodes generated from it will have the template applied. Usage of the template follows 3 main parameters: strict, keys, and apply. Setting strict to "true" will stop the node from creating any new keys other than the ones supplied in the template. The keys object should contain a list of the keys you want each child node to start with, as well as the typing and default parameters for the key. Setting the default value of a key to a function will run the function when the child is created. Moxley now also has an apply template parameter that will run as a function on the child at creation using the child as the this scope for the activation. Here are some examples:
+Moxley can now use templates to enforce rules on nodes! Simply use the ._createTemplate function on a node and all nodes generated from it will have the template applied. Usage of the template follows 3 main parameters: strict, keys, and apply. Setting strict to "true" will stop the node from creating any new keys other than the ones supplied in the template. The keys object should contain a list of the keys you want each child node to start with, as well as the typing and default parameters for the key. Moxley now accepts a new parameter for each key called validator that accept a validation function that should return true if the value is valid and false if invalid. Setting the default value of a key to a function will run the function when the child is created. Moxley also has an apply template parameter that will run as a function on the child at creation using the child as the this scope for the activation. Here are some examples:
 
 Setting a default key and value
 ```javascript
@@ -195,6 +195,27 @@ node1._createTemplate({
 var node2 = node1._create("node2")
 
 node2.test = "test" // "Strict template enabled, no new keys allowed"
+```
+
+Using validator to apply validation to a key
+
+```javascript
+var node1 = db._create("node1")
+
+node1._createTemplate({
+    strict: false,
+    keys: {
+        data: {
+            type: "String",
+            default: "test",
+            validator: (x) => { return x.length < 5 }
+        }
+    }
+})
+
+var node2 = node1._create("node2")
+node2.data = "testing" // "New value rejected: Failed validation
+console.log(node2.data) // "test"
 ```
 
 Using apply to affect a child at creation

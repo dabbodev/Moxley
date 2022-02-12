@@ -403,27 +403,38 @@ class DC {
 
 class DT {
     constructor(o) {
-        var k = Object.keys(o)
+        this.strict = o.strict ? o.strict : false
+        this.apply = o.apply ? o.apply : undefined
+        this.keys = {}
+        var k = Object.keys(o.keys)
         k.map((key) => { 
-            if (typeof(o[key]) == "function") {
-                this[key] = o[key].toString() 
-            } else {
-                this[key] = o[key]
-            } 
+            this.keys[key] = {}
+            var k2 = Object.keys(o.keys[key])
+            k2.map((prop) => {
+                if (typeof(o.keys[key][prop]) == "function") {
+                    this.keys[key][prop] = o.keys[key][prop].toString() 
+                } else {
+                    this.keys[key][prop] = o.keys[key][prop]
+                } 
+            })
         })
     }
 
     toString() {
-        var out = {}
-        var k = Object.keys(this)
+        var out = {strict: this.strict, apply: this.apply, keys: {}}
+        var k = Object.keys(this.keys)
         k.map((key) => { 
-            if (typeof(this[key]) == "function") {
-                out[key] = this[key].toString() 
-            } else {
-                out[key] = this[key]
-            }
+            out.keys[key] = {}
+            var k2 = Object.keys(this.keys[key])
+            k2.map((prop) => {
+                if (typeof(this.keys[key]) == "function") {
+                    out.keys[key][prop] = this.keys[key][prop].toString() 
+                } else {
+                    out.keys[key][prop] = this.keys[key][prop]
+                }
+            })
         })
-        return stringify(this)
+        return stringify(out)
     }
 }
 
@@ -477,12 +488,18 @@ const handler = {
             }
             return true
         }
-        if (Reflect.get(obj, "_template")) {
+        if (Reflect.get(obj, "_template") && arg) {
             var template = obj._template.keys
             if (template[prop]) {
                 if (arg.constructor.name != template[prop].type) {
                     console.log("Invalid type " + arg.constructor.name + " set to parameter " + prop + ". Expected " + template[prop].type)
                     return false
+                }
+                if (template[prop].validator) {
+                    if (!eval(template[prop].validator)(arg)) {
+                        console.log("New value rejected: Failed validation")
+                        return false
+                    }
                 }
             } else if (obj._template.strict == true) {
                 console.log("Strict template enabled, no new keys allowed")

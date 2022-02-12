@@ -8,22 +8,41 @@ async function main() {
 
     var node1 = db._create("node1")
 
-    var node2 = db._create("node2")
-    
-    node2._createCollection("collection", {accept: (item) => { return item.data == "accepted" }})
+    node1._createTemplate({
+        strict: false,
+        keys: {
+            data: {
+                type: "String",
+                default: "test",
+                validator: (x) => { return x.length < 5 }
+            }
+        }
+    })
 
-    node1._bind(node2.collection)
-
-    var child1 = node1._store("rejected")
-
-    var child2 = node1._store("accepted")
-
-    console.log(node2.collection[0].data) // "accepted"
+    var node2 = node1._create("node2")
+    node2.data = "testing"
+    console.log(node2.data)
 }
 
 main()
 
 /*
+var db = new DB("./db/").db
+
+var node1 = db._create("node1")
+
+var node2 = db._create("node2")
+
+node2._createCollection("collection", {accept: (item) => { return item.data == "accepted" }})
+
+node1._bind(node2.collection)
+
+var child1 = node1._store("rejected")
+
+var child2 = node1._store("accepted")
+
+console.log(node2.collection[0].data) // "accepted"
+
 var node1 = db._create("node1")
 
 node1._createTemplate({
