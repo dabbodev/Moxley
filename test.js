@@ -2,11 +2,13 @@ const DB = require("./index.js")
 
 async function main() {
     
-    //var db = await new DB("./db/").db._loadFromDir()
-
+    var db = await new DB("./db/").db._loadFromDir()
+/*
     var db = new DB("./db/").db
 
     var node1 = db._create("node1")
+
+    node1.hookReport = (val, obj) => { console.log("hook triggered")  }
 
     node1._createTemplate({
         strict: false,
@@ -14,19 +16,36 @@ async function main() {
             data: {
                 type: "String",
                 default: "test",
-                validator: (x) => { return x.length < 5 }
+                hooks: ['0/0/hookReport']
             }
         }
     })
-
-    var node2 = node1._create("node2")
-    node2.data = "testing"
-    console.log(node2.data)
+*/
+    var node3 = db.node1._create("node3")
+    node3.data = "testing"
+    console.log(node3.data)
 }
 
 main()
 
 /*
+var node1 = db._create("node1")
+
+node1._createTemplate({
+    strict: false,
+    keys: {
+        data: {
+            type: "String",
+            default: "test",
+            validator: (x) => { return x.length < 5 }
+        }
+    }
+})
+
+var node2 = node1._create("node2")
+node2.data = "testing"
+console.log(node2.data)
+
 var db = new DB("./db/").db
 
 var node1 = db._create("node1")

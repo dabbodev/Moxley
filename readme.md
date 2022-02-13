@@ -130,7 +130,7 @@ console.log(node1.counter) // 2
 
 #### Templates
 
-Moxley can now use templates to enforce rules on nodes! Simply use the ._createTemplate function on a node and all nodes generated from it will have the template applied. Usage of the template follows 3 main parameters: strict, keys, and apply. Setting strict to "true" will stop the node from creating any new keys other than the ones supplied in the template. The keys object should contain a list of the keys you want each child node to start with, as well as the typing and default parameters for the key. Moxley now accepts a new parameter for each key called validator that accept a validation function that should return true if the value is valid and false if invalid. Setting the default value of a key to a function will run the function when the child is created. Moxley also has an apply template parameter that will run as a function on the child at creation using the child as the this scope for the activation. Here are some examples:
+Moxley can now use templates to enforce rules on nodes! Simply use the ._createTemplate function on a node and all nodes generated from it will have the template applied. Usage of the template follows 3 main parameters: strict, keys, and apply. Setting strict to "true" will stop the node from creating any new keys other than the ones supplied in the template. The keys object should contain a list of the keys you want each child node to start with, as well as the typing and default parameters for the key. Moxley also accepts a parameter for each key called validator that accept a validation function that should return true if the value is valid and false if invalid. Moxley will pass the value as well as a reference the node that is being updated Setting the default value of a key to a function will run the function when the child is created. Moxley also has an apply template parameter that will run as a function on the child at creation using the child as the this scope for the activation. Here are some examples:
 
 Setting a default key and value
 ```javascript
@@ -208,7 +208,7 @@ node1._createTemplate({
         data: {
             type: "String",
             default: "test",
-            validator: (x) => { return x.length < 5 }
+            validator: (newVal, obj) => { return newVal.length < 5 }
         }
     }
 })
@@ -237,6 +237,30 @@ node1._createTemplate({
 
 var node2 = node1._create("node2")
 console.log(node2.counter) // 1
+```
+
+Moxley now also allows for a new template parameter for each key call hooks. Using the hook system, Moxley can trigger any stored function whenever a value in a template is updated. The hooks parameter accept a list of id strings to each function you would like triggered on updates. The format for the id string of a stored function can be found by adding the name of the function to the id of the node it's stored in. Mosley will pass the new value set, as well as a reference to the node that was updated as arguments to the function.
+
+For example:
+
+```javascript
+var node1 = db._create("node1")
+
+node1.hookReport = (val, obj) => { console.log("Hook Triggered")  }
+
+node1._createTemplate({
+    strict: false,
+    keys: {
+        data: {
+            type: "String",
+            default: "test",
+            hooks: ['0/0/hookReport']
+        }
+    }
+})
+
+var node2 = node1._create("node2")
+node2.data = "testing" // "Hook Triggered"
 ```
 
 #### Links
