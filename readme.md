@@ -477,3 +477,17 @@ node._keys
 collection._items
 collection._items[0]
 ```
+
+Moxley now has a new internal function called ._getSnapshot that gives you a snapshot of all data stored in the node at the current time
+
+```javascript
+var node1 = db._store({name: "counterTest", testKey: "test", counter: 0})
+
+node1.increment = (x) => { x.counter++ }
+
+console.log(node1._getSnapshot()) // { name: 'counterTest', testKey: 'test', counter: 0 }
+
+node1.increment(node1)
+
+console.log(node1._getSnapshot()) // { name: 'counterTest', testKey: 'test', counter: 1 }
+```

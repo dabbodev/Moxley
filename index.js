@@ -1,7 +1,7 @@
 var fs = require('fs');
 const {parse, stringify} = require('flatted');
 
-class DB {
+class DB { // DataBase (root node)
     constructor(loc) {
         this._loc = loc
         this._children = []
@@ -79,6 +79,18 @@ class DB {
         if (!this[n]) {
             this[n] = i
         }
+    }
+
+    _getSnapshot() {
+        var out = {}
+        this._keys.map((key) => {
+            var temp = this[key]
+            var rules = ["DN", "DC", "DB", "DT", "Function"]
+            if (rules.indexOf(temp.constructor.name) == -1) {
+                out[key] = temp
+            }
+        })
+        return out
     }
 
     //=======================
@@ -217,7 +229,7 @@ class DB {
         var sep = id.lastIndexOf('/')
         var name = id.substring(sep + 1)
         id = id.substring(0, sep)
-        return this._getById(id)[name]
+        return this._getById(id)[name].bind(this._getById(id))
     }
 
     _scanLocation(loc) { // Check for existing directory
@@ -286,7 +298,7 @@ class DB {
     
 }
 
-class DN extends DB {
+class DN extends DB { // DataNode (extended root)
     constructor(o, p, n=undefined) {
         var loc = p._loc + (p._children.length) + "/"
         super(loc)
@@ -313,7 +325,7 @@ class DN extends DB {
     }
 }
 
-class DC {
+class DC { // DataCollection
     constructor(p, n, o={keySort: undefined, itemSort: undefined, indexBy: undefined, accept: undefined}) {
         this._parent = p
         this._root = p._root
@@ -439,7 +451,7 @@ class DC {
     }
 }
 
-class DT {
+class DT { // DataTemplate
     constructor(o) {
         this.strict = o.strict ? o.strict : false
         this.apply = o.apply ? o.apply.toString() : undefined
