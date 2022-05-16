@@ -19,65 +19,62 @@ class DB { // DataBase (root node)
     //MAIN STORAGE FUNCTIONS
     //=======================
 
-    _create(n) { // Creates a new child node with name n
-        var i = this._children[this._children.push(new WillSmith({}, this, n).dn) - 1]
+    _create(name) { // Creates a new child node with a given name
+        var newChild = this._children[this._children.push(new WillSmith({}, this, name).dn) - 1]
         if (this._childTemplate) {
-            i._template = this._childTemplate
-            i._initTemplate()
+            newChild._template = this._childTemplate
+            newChild._initTemplate()
         }
-        this._updateBindings(i)
+        this._updateBindings(newChild)
         this._saveState()
-        return i
+        return newChild
     }
 
-    _store(o, n=undefined) {        // Stores object o as a child node with name n, n can also be supplied in the object. 
-        if (typeof(o) == "array") { // If a primitive is given, a child will be created and the primitive will be stored under the key "data"
-            var a = []
-            for (var b = 0; b < o.length; b++) {
-                a.push(this._store(o[b]))
+    _store(data, name=undefined) {        // Stores data as a new child node with a given name 
+        if (typeof(data) == "array") { // If a primitive is given, a child will be created and the primitive will be stored under the key "data"
+            var out = []
+            for (var i = 0; i < o.length; i++) {
+                out.push(this._store(data[i]))
             }
             this._saveState()
-            return a
+            return out
         } else {
-            var i = this._children[this._children.push(new WillSmith({}, this, n).dn) - 1]
+            var newChild = this._children[this._children.push(new WillSmith({}, this, name).dn) - 1]
             if (this._childTemplate) {
-                i._template = this._childTemplate
-                i._initTemplate()
+                newChild._template = this._childTemplate
+                newChild._initTemplate()
             }
-            i._set(o)
-            this._updateBindings(i)
+            newChild._set(data)
+            this._updateBindings(newChild)
             this._saveState()
-            return i
+            return newChild
         }
     }
 
-    _set(o, n=undefined) { // Sets the value of a key n on the current node to the value given o 
-        switch(typeof(o)) { // If o is an array it will iterate over each item, if o is an object it will copy the object's keys to the current node
+    _set(data, key=undefined) { // Sets the value of a key on the current node to the value given in data
+        switch(typeof(data)) { // If data is an array it will iterate over each item, if data is an object it will copy the object's keys to the current node
             case "array":
-                o.forEach(function (e) { this.set(e) })
+                data.forEach((entry) => { this.set(entry) })
             case "object":
-                var k = Object.keys(o)
-                for (var a = 0; a < k.length; a++) {
-                    this[k[a]] = o[k[a]]
-                }
+                Object.keys(data).forEach((entry) => { this[entry] = data[entry] })
                 break
             default:
-                if (n) {
-                    this[n] = o
+                if (key) {
+                    this[key] = data
                 } else {
-                    this.data = o
+                    this.data = data
                 }
                 break
         }
         this._saveState()
     }
 
-    _link(i, n) { // Links another node i to this node as key n
-        if (typeof(i) == "string") {
-            i = this._root._getById(i)
+    _link(target, name) { // Links another node to this node as a named key
+        if (typeof(target) == "string") {
+            target = this._root._getById(target)
         }
-        if (!this[n]) {
-            this[n] = i
+        if (!this[name]) {
+            this[name] = target
         }
     }
 
@@ -97,39 +94,38 @@ class DB { // DataBase (root node)
     //COLLECTION FUNCTIONS
     //=======================
 
-    _createCollection(n, o=undefined) { // Creates a new collection interface named n on the current node with options o
-        this[n] = new Tupac(this, n, o).dc
+    _createCollection(name, options=undefined) { // Creates a new collection interface with options
+        this[name] = new Tupac(this, name, options).dc
         this._saveState()
-        return this[n]
+        return this[name]
     }  
 
-    _collect(i, n, o=undefined) { // Collects a node i into a collection named "n" on the current node, if no collection exists, one will be created with o options
-        if (!this[n]) {
-            this[n] = new Tupac(this, n, o).dc
+    _collect(target, name, options=undefined) { // Collects a node into a collectionon the current node, if no collection exists, one will be created with options
+        if (!this[name]) {
+            this[name] = new Tupac(this, name, options).dc
         }
-        switch(typeof(i)) {
+        switch(typeof(target)) {
             case "array":
-                i.forEach(function (e) { this._collect(e, n) })
+                target.forEach((entry) => { this._collect(entry, name) })
                 break
             case "string":
-                this[n].push(this._root._getById(i))
+                this[name].push(this._root._getById(target))
                 break
             default:   
-                var c = this[n]
-                c._add(i)
+                this[name]._add(target)
         }
     }
 
-    _pull(i, n) { // Removes a node i from a collection named n on the current node
-        switch(typeof(i)) {
+    _pull(target, name) { // Removes a node from a collection on the current node
+        switch(typeof(target)) {
             case "array":
-                i.forEach(function (e) { this._pull(e, n) })
+                target.forEach((entry) => { this._pull(entry, name) })
                 break
             case "string":
-                this._pull(this._root._getById(i), n)
+                this._pull(this._root._getById(target), name)
                 break
             default:
-                this[n]._pull(i)
+                this[name]._pull(target)
         }
     }
 
@@ -147,15 +143,15 @@ class DB { // DataBase (root node)
     }
 
     _updateBindings(item) { // This function adds the new child created on this node to each of it's bound collections
-        this._bindings.map((b) => { this._root._findCollection(b)._add(item) })
+        this._bindings.forEach((b) => { this._root._findCollection(b)._add(item) })
     }
 
     //=======================
     //TEMPLATE FUNCTIONS
     //=======================
     
-    _createTemplate(o) { // Creates a new template at the current node with options o. New nodes created from this node will follow this template
-        this._childTemplate = new DT(o)
+    _createTemplate(options) { // Creates a new template at the current node with options. New nodes created from this node will follow this template
+        this._childTemplate = new DT(options)
         this._saveState()
     }
 
@@ -165,19 +161,18 @@ class DB { // DataBase (root node)
     }
 
     _initTemplate() { // Initializes this node with it's given template
-        var k = Object.keys(this._template.keys)
-        k.map((key) => { 
+        Object.keys(this._template.keys).forEach((key) => { 
             var d = this._template.keys[key].default 
             if (typeof(d) == "function") {
-                var t = eval(this._template.keys[key].default).bind(this)
-                this[key] = Reflect.apply(t, this, [])
+                var initFunc = eval(this._template.keys[key].default).bind(this)
+                this[key] = Reflect.apply(initFunc, this, [])
             } else {
                 this[key] = this._template.keys[key].default 
             }
         })
         if (this._template.apply) {
-            var t = eval(this._template.apply).bind(this)
-            Reflect.apply(t, this, [])
+            var applyFunc = eval(this._template.apply).bind(this)
+            Reflect.apply(applyFunc, this, [])
         }
         this._saveState()
     }
@@ -186,36 +181,36 @@ class DB { // DataBase (root node)
     //UTILITY FUNCTIONS
     //=======================
 
-    _query(f, s = undefined) { // Queries the children of the current node using filter function f and sort function s
-        var r = this._children.filter(f)
-        if (s) {
-            r.sort(s)
+    _query(filter, sort = undefined) { // Queries the children of the current node using filter function f and sort function s
+        var results = this._children.filter(filter)
+        if (sort) {
+            results.sort(sort)
         }
-        return r
+        return results
     }
 
-    _getById(i) { // Gets a reference to a node using its id
-        var a = this._id.split("/")
-        var b = i.split("/")
-        var s = this
-        for (var c = 0; c < b.length; c++) {
-            if (a[c]) {
-                if (a[c] != b[c]) {
-                    if (s._children[b[c]]) {
-                        s = s._children[b[c]]
+    _getById(id) { // Gets a reference to a node using its id
+        var id1 = this._id.split("/")
+        var id2 = id.split("/")
+        var selected = this
+        for (var i = 0; i < id2.length; i++) {
+            if (id1[i]) {
+                if (id1[i] != id2[i]) {
+                    if (selected._children[id2[i]]) {
+                        selected = selected._children[id2[i]]
                     } else {
                         return null
                     }
                 }
             } else {
-                if (s._children[b[c]]) {
-                    s = s._children[b[c]]
+                if (selected._children[id2[i]]) {
+                    selected = selected._children[id2[i]]
                 } else {
                     return null
                 }
             }
         }
-        return s
+        return selected
     }
 
     _findCollection(id) { // Gets a reference to a collection using its id
@@ -275,12 +270,9 @@ class DB { // DataBase (root node)
                     this._template = this._parent._childTemplate
                 }
             }
-            var entries = fs.readdirSync(loc)
-            
-            for (var a = 0; a < entries.length; a++) {
-                var entry = entries[a]
-                var d = entry.indexOf('.')
-                if (d == -1) {
+            fs.readdirSync(loc).forEach(async (entry) => {
+                var dot = entry.indexOf('.')
+                if (dot == -1) {
                     var next = this._loc + '/' + entry + '/'
                     statecheck = next + '_state.ms'
                     if (fs.existsSync(statecheck)) {
@@ -291,7 +283,7 @@ class DB { // DataBase (root node)
                         this[entry] = new Tupac(this, entry).dc
                     }
                 } 
-            }
+            })
         }
         return this
     }
@@ -299,25 +291,27 @@ class DB { // DataBase (root node)
 }
 
 class DN extends DB { // DataNode (extended root)
-    constructor(o, p, n=undefined) {
-        var loc = p._loc + (p._children.length) + "/"
+    constructor(data, parent, name=undefined) {
+        var loc = parent._loc + (parent._children.length) + "/"
         super(loc)
-        this._parent = p
-        this._root = p._root
-        this._id = p._id + "/" + (p._children.length)
+        this._parent = parent
+        this._root = parent._root
+        this._id = parent._id + "/" + (parent._children.length)
         
-        if (typeof(o) === "object") {
-            var k = Object.keys(o)
-            for (var a = 0; a < k.length; a++) {
-                this[k[a]] = o[k[a]]
-            }
+        if (typeof(data) === "object") {
+            Object.keys(data).forEach((key) => { this[key] = data[key] })
         } else {
-            this.data = o
+            this.data = data
         }
-        if (n) {
-            this._name = n
-            if (!p[n]) {
-                p[n] = this
+        if (name) {
+            this._name = name
+            if (!parent[name]) {
+                parent[name] = this
+            }
+        } else if (this.name) {
+            this._name = this.name
+            if (!parent[this.name]) {
+                parent[this.name] = this
             }
         } else {
             this._name = ""
@@ -326,19 +320,19 @@ class DN extends DB { // DataNode (extended root)
 }
 
 class DC { // DataCollection
-    constructor(p, n, o={keySort: undefined, itemSort: undefined, indexBy: undefined, accept: undefined}) {
-        this._parent = p
-        this._root = p._root
-        this._name = n
-        this._loc = this._parent._loc + n + '/'
+    constructor(parent, name, options={keySort: undefined, itemSort: undefined, indexBy: undefined, accept: undefined}) {
+        this._parent = parent
+        this._root = parent._root
+        this._name = name
+        this._loc = this._parent._loc + name + '/'
         this._id = this._parent._id + '/' + this._name
-        this._parent[n] = this
+        this._parent[name] = this
         this._keys = []
         this._items = []
-        this._keySort = o.keySort
-        this._itemSort = o.itemSort
-        this._indexBy = o.indexBy
-        this._accept = o.accept
+        this._keySort = options.keySort
+        this._itemSort = options.itemSort
+        this._indexBy = options.indexBy
+        this._accept = options.accept
         if (!fs.existsSync(this._loc)){
             fs.mkdirSync(this._loc)
         } else {
@@ -346,20 +340,20 @@ class DC { // DataCollection
         }
     }
 
-    _queryKeys(f, s = undefined) {
-        var r = this._keys.filter(f)
-        if (s) {
-            r.sort(s)
+    _queryKeys(filter, sort = undefined) {
+        var results = this._keys.filter(filter)
+        if (sort) {
+            results.sort(sort)
         }
-        return r
+        return results
     }
 
-    _queryItems(f, s = undefined) {
-        var r = this._items.filter(f)
-        if (s) {
-            r.sort(s)
+    _queryItems(filter, sort = undefined) {
+        var results = this._items.filter(filter)
+        if (sort) {
+            results.sort(sort)
         }
-        return r
+        return results
     }
 
     _add(item) {
@@ -400,14 +394,15 @@ class DC { // DataCollection
     }
 
     _populate() {
-        for (var a = 0; a < this._keys.length; a++) {
-            var k = this._keys[a]
-            var f = this._loc + k + '.ml'
-            var id = String(fs.readFileSync(f))
-            var item = this._parent._root.getById(id)
-            var x = this._items.push(item) - 1
-            this[k] = this._items[x]
-        }
+        this._keys.forEach((key) => {
+            if (!this[key]) {
+                var file = this._loc + key + '.ml'
+                var id = String(fs.readFileSync(file))
+                var item = this._parent._root.getById(id)
+                var x = this._items.push(item) - 1
+                this[key] = this._items[x]
+            }
+        })
     }
 
     _saveState() {
@@ -452,19 +447,17 @@ class DC { // DataCollection
 }
 
 class DT { // DataTemplate
-    constructor(o) {
-        this.strict = o.strict ? o.strict : false
-        this.apply = o.apply ? o.apply.toString() : undefined
+    constructor(options) {
+        this.strict = options.strict ? options.strict : false
+        this.apply = options.apply ? options.apply.toString() : undefined
         this.keys = {}
-        var k = Object.keys(o.keys)
-        k.map((key) => { 
+        Object.keys(options.keys).forEach((key) => { 
             this.keys[key] = {}
-            var k2 = Object.keys(o.keys[key])
-            k2.map((prop) => {
-                if (typeof(o.keys[key][prop]) == "function") {
-                    this.keys[key][prop] = o.keys[key][prop].toString() 
+            Object.keys(options.keys[key]).forEach((prop) => {
+                if (typeof(options.keys[key][prop]) == "function") {
+                    this.keys[key][prop] = options.keys[key][prop].toString() 
                 } else {
-                    this.keys[key][prop] = o.keys[key][prop]
+                    this.keys[key][prop] = options.keys[key][prop]
                 } 
             })
         })
@@ -472,11 +465,9 @@ class DT { // DataTemplate
 
     toString() {
         var out = {strict: this.strict, apply: this.apply, keys: {}}
-        var k = Object.keys(this.keys)
-        k.map((key) => { 
+        Object.keys(this.keys).forEach((key) => { 
             out.keys[key] = {}
-            var k2 = Object.keys(this.keys[key])
-            k2.map((prop) => {
+            Object.keys(this.keys[key]).forEach((prop) => {
                 if (typeof(this.keys[key]) == "function") {
                     out.keys[key][prop] = this.keys[key][prop].toString() 
                 } else {
@@ -499,9 +490,9 @@ const handler = {
     get: function(obj, prop, arg) {
         var loc = Reflect.get(obj, "_loc")
         if (obj.constructor.name == "DC") {
-            var k = Reflect.get(obj, "_keys").length
-            var i = Reflect.get(obj, "_items").length
-            if (k > i) {
+            var numKeys = Reflect.get(obj, "_keys").length
+            var numItems = Reflect.get(obj, "_items").length
+            if (numKeys > numItems) {
                 Reflect.get(obj, "_populate")
             }
         }
@@ -540,10 +531,10 @@ const handler = {
         if (typeof(arg) == "function" && !Reflect.has(obj, prop)) {
             var filename = loc + prop + ".mf"
             fs.writeFileSync(filename, arg.toString())
-            var k = Reflect.get(obj, "_keys")
-            if (k.indexOf(prop) == -1) {
-                k.push(prop)
-                Reflect.set(obj, "_keys", k)
+            var keys = Reflect.get(obj, "_keys")
+            if (keys.indexOf(prop) == -1) {
+                keys.push(prop)
+                Reflect.set(obj, "_keys", keys)
             }
             return true
         }
@@ -557,8 +548,8 @@ const handler = {
                 if (template[prop].validator) {
                     var root = Reflect.get(obj, "_root")
                     var origin = root._getById(obj._id)
-                    var t = eval(template[prop].validator).bind(origin)
-                    var result = Reflect.apply(t, origin, [arg, origin])
+                    var validator = eval(template[prop].validator).bind(origin)
+                    var result = Reflect.apply(validator, origin, [arg, origin])
                     if (!result) {
                         console.log("New value rejected: Failed validation")
                         return false
@@ -574,10 +565,10 @@ const handler = {
                 if (arg.constructor.name == "DN") {
                     var filename = loc + prop + ".ml"
                     fs.writeFileSync(filename, arg._id)
-                    var k = Reflect.get(obj, "_keys")
-                    if (k.indexOf(prop) == -1) {
-                        k.push(prop)
-                        Reflect.set(obj, "_keys", k)
+                    var keys = Reflect.get(obj, "_keys")
+                    if (keys.indexOf(prop) == -1) {
+                        keys.push(prop)
+                        Reflect.set(obj, "_keys", keys)
                     }
                     return true
                 } else {
@@ -589,10 +580,10 @@ const handler = {
         } else {
             var filename = loc + prop + ".md"
             fs.writeFileSync(filename, stringify(arg))
-            var k = Reflect.get(obj, "_keys")
-            if (k.indexOf(prop) == -1) {
-                k.push(prop)
-                Reflect.set(obj, "_keys", k)
+            var keys = Reflect.get(obj, "_keys")
+            if (keys.indexOf(prop) == -1) {
+                keys.push(prop)
+                Reflect.set(obj, "_keys", keys)
             } else {
                 if (Reflect.get(obj, "_template") && arg) {
                     var template = obj._template.keys
@@ -605,22 +596,7 @@ const handler = {
             }
             return true
         }
-    },
-    apply: function(target, that, args) {
-        return Reflect.apply(target, that, args)
-    },
-    enumerate: function (oTarget, sKey) {
-        return Reflect.enumerate(oTarget, sKey)
-      },
-    ownKeys: function (oTarget, sKey) {
-        return Reflect.ownKeys(oTarget, sKey);
-      },
-      has: function (oTarget, sKey) {
-        return Reflect.has(oTarget, sKey)
-      },
-      getOwnPropertyDescriptor: function (oTarget, sKey) {
-        return Reflect.getOwnPropertyDescriptor(oTarget, sKey)
-      },
+    }
 }
 
 class WillSmith {
