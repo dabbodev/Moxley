@@ -4,17 +4,19 @@ async function main() {
     
     //var db = await new DB("./db/").db._loadFromDir()
     var db = new DB("./db/").db
-
-    var node1 = db._store({name: "counterTest", testKey: "test", counter: 0})
-    node1.increment = (x) => { x.counter++ }
-    console.log(node1._getSnapshot())
-    node1.increment(node1)
-    console.log(node1._getSnapshot())
+    await db._loadFromCSV("./test.csv", ',', '\r\n', true, 'name')
+    console.log(db._children[0])
 }
 
 main()
 
 /*
+var node1 = db._store({name: "counterTest", testKey: "test", counter: 0})
+node1.increment = (x) => { x.counter++ }
+console.log(node1._getSnapshot())
+node1.increment(node1)
+console.log(node1._getSnapshot())
+
 var node1 = db._create("node1")
 
 node1._createTemplate({

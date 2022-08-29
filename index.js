@@ -287,11 +287,38 @@ class DB { // DataBase (root node)
         }
         return this
     }
+
+    async _loadFromCSV(filename, delimiter=',', newline='\r\n', hasTitles=true, indexBy=undefined) {
+        var file = new String(fs.readFileSync(filename))
+        var lines = file.split(newline)
+        var cols = []
+        if (hasTitles) {
+            cols = lines[0].split(delimiter)
+        }
+        lines.shift()
+        lines.forEach((line) => {
+            var vals = line.split(delimiter)
+            var temp = {}
+            if (cols.length > 0) {
+                vals.forEach((x, i) => { temp[cols[i]] = x })
+            } else {
+                vals.forEach((x, i) => { temp[i] = x })
+            }
+            if (indexBy) {
+                this._store(temp, temp[indexBy])
+            } else {
+                this._store(temp)
+            }
+        })
+    }
     
 }
 
 class DN extends DB { // DataNode (extended root)
     constructor(data, parent, name=undefined) {
+        if (data.name && !name) {
+            name = data.name
+        }
         var loc = parent._loc + (parent._children.length) + "/"
         super(loc)
         this._parent = parent

@@ -442,6 +442,24 @@ Moxley now loads itself automatically using the data created from previous sessi
 var db = await new DB("./db/").db._loadFromDir()
 ```
 
+Moxley can now load data from a CSV file! Just await the result of the ._loadFromCSV command from any node and it will populate with children created from the file.
+
+```javascript
+await db._loadFromCSV(filename, delimiter=',', newline='\r\n', hasTitles=true, indexBy=undefined)
+```
+
+Paramenters: delimiter (default: ',') & newline (default: '\r\n') for modifying file processing, 
+hasTitles (default: true) set this to false if your CSV file doesn't have a first row with column titles
+indexBy can be set to the title of a column and will quick set the name of each node to the value in the given column
+
+Example:
+```javascript
+var node = db._create("node")
+await node._loadFromCSV("test.csv")
+var row1 = node._children[0]
+console.log(row1.name) // Data in Row1, Column titled "name"
+```
+
 #### Other Internals
 
 In Moxley these can be used with any data node:
