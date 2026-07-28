@@ -56,7 +56,7 @@ async function createRepeatedLoadScenario(t) {
 }
 
 test(
-  'calling _loadFromDir twice appends another reconstructed child',
+  'calling _loadFromDir twice preserves reconstructed child identity',
   { timeout: TEST_TIMEOUT_MS },
   async (t) => {
     const { root } = await createRepeatedLoadScenario(t);
@@ -71,19 +71,21 @@ test(
 
     const secondResult = await root._loadFromDir();
     const secondSnapshot = [...root._children];
-    const appendedChild = secondSnapshot[1];
+    const childAfterSecondLoad = secondSnapshot[0];
 
     assert.strictEqual(secondResult, root);
-    assert.equal(secondSnapshot.length, 2);
-    assert.strictEqual(secondSnapshot[0], firstChild);
-    assert.notStrictEqual(appendedChild, firstChild);
-    assert.equal(firstChild._id, '0/0');
-    assert.equal(appendedChild._id, '0/1');
+    assert.equal(secondSnapshot.length, 1);
+    assert.strictEqual(childAfterSecondLoad, firstChild);
+    assert.equal(childAfterSecondLoad._id, '0/0');
+    assert.equal(
+      secondSnapshot.some((child) => child._id === '0/1'),
+      false,
+    );
   },
 );
 
 test(
-  'repeated _loadFromDir keeps named lookup on the first child while creating a new directory',
+  'repeated _loadFromDir preserves named lookup and directory entries',
   { timeout: TEST_TIMEOUT_MS },
   async (t) => {
     const { databaseDirectory, root } =
@@ -102,21 +104,15 @@ test(
     );
 
     await root._loadFromDir();
-    const appendedChild = root._children[1];
     const secondEntries = (await readdir(databaseDirectory)).sort();
-    const firstEntrySet = new Set(firstEntries);
-    const secondEntrySet = new Set(secondEntries);
-    const removedEntries = firstEntries.filter(
-      (entry) => !secondEntrySet.has(entry),
-    );
-    const addedEntries = secondEntries.filter(
-      (entry) => !firstEntrySet.has(entry),
-    );
 
-    assert.equal((await stat(secondDirectory)).isDirectory(), true);
-    assert.deepEqual(removedEntries, []);
-    assert.deepEqual(addedEntries, ['1']);
+    assert.deepEqual(secondEntries, firstEntries);
+    await assert.rejects(
+      stat(secondDirectory),
+      (error) => error && error.code === 'ENOENT',
+    );
     assert.strictEqual(root.descendant, firstChild);
-    assert.notStrictEqual(root.descendant, appendedChild);
+    assert.strictEqual(root._children[0], firstChild);
+    assert.equal(root._children.length, 1);
   },
 );
