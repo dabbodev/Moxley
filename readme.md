@@ -29,7 +29,7 @@ From here you just need to initialize the main DB node by passing it the path to
 var db = new DB(path).db
 ```
 
-And that's it! Moxley is ready for your data!
+> **Persistence status:** Current `master` is undergoing persistence hardening and is not a qualified release. Before reopening an existing database, review the [State Compatibility Policy](STATE_COMPATIBILITY.md).
 
 ### Storing and Retrieving Data
 #### Node Structure
