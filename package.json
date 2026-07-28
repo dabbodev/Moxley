@@ -14,7 +14,7 @@
     "moxley"
   ],
   "author": "dabbo",
-  "license": "ISC",
+  "license": "Apache-2.0",
   "dependencies": {
     "flatted": "^3.0.2"
   }

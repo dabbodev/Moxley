@@ -509,3 +509,11 @@ node1.increment(node1)
 
 console.log(node1._getSnapshot()) // { name: 'counterTest', testKey: 'test', counter: 1 }
 ```
+
+## License
+
+Current Moxley is licensed under the [Apache License 2.0](LICENSE).
+
+The exact historical `moxley-db@3.2.0` release has an `ISC OR Apache-2.0` clarification in [LICENSING.md](LICENSING.md).
+
+Dependencies and other third-party material remain under their respective licenses.
