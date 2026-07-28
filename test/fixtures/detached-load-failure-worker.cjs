@@ -5,7 +5,7 @@ const path = require('node:path');
 
 const Moxley = require('../..');
 
-const DETACHED_REJECTION_TIMEOUT_MS = 5_000;
+const OUTER_SETTLEMENT_TIMEOUT_MS = 5_000;
 
 function errorName(error) {
   if (error && typeof error.name === 'string') {
@@ -18,23 +18,31 @@ function emit(payload) {
   process.stdout.write(`${JSON.stringify(payload)}\n`);
 }
 
-function waitForDetachedRejection(promise) {
+function observeOuterSettlement(promise) {
   return new Promise((resolve) => {
     const timeout = setTimeout(() => {
-      resolve(false);
-    }, DETACHED_REJECTION_TIMEOUT_MS);
+      resolve({ status: 'timeout' });
+    }, OUTER_SETTLEMENT_TIMEOUT_MS);
 
-    promise.then(() => {
-      clearTimeout(timeout);
-      resolve(true);
-    });
+    promise.then(
+      (value) => {
+        clearTimeout(timeout);
+        resolve({ status: 'resolved', value });
+      },
+      (error) => {
+        clearTimeout(timeout);
+        resolve({ status: 'rejected', error });
+      },
+    );
   });
 }
 
 async function main() {
   const testDirectory = process.argv[2];
   if (!testDirectory || !path.isAbsolute(testDirectory)) {
-    throw new TypeError('worker requires an absolute test directory');
+    emit({ status: 'invalid-input' });
+    process.exitCode = 2;
+    return;
   }
 
   const databaseDirectory = path.join(testDirectory, 'database');
@@ -49,65 +57,67 @@ async function main() {
   const reopened = new Moxley(databasePath);
   const root = reopened.db;
   let outerStatus = 'pending';
-  let outerResolvedBeforeDetachedRejection = false;
   const detachedRejections = [];
-  let resolveDetachedRejection;
-  const detachedRejection = new Promise((resolve) => {
-    resolveDetachedRejection = resolve;
-  });
   const onUnhandledRejection = (error) => {
-    outerResolvedBeforeDetachedRejection = outerStatus === 'resolved';
     detachedRejections.push({ name: errorName(error) });
-    resolveDetachedRejection();
   };
 
   process.on('unhandledRejection', onUnhandledRejection);
 
   try {
-    const outerResult = await root._loadFromDir().then(
-      (value) => {
-        outerStatus = 'resolved';
-        return {
-          status: outerStatus,
-          returnedSameRoot: value === root,
-        };
-      },
-      (error) => {
-        outerStatus = 'rejected';
-        return {
-          status: outerStatus,
-          errorName: errorName(error),
-        };
-      },
-    );
+    const outerResult = await observeOuterSettlement(root._loadFromDir());
+    outerStatus = outerResult.status;
 
-    if (outerResult.status !== 'resolved') {
-      emit({
-        status: 'outer-rejected',
-        outerStatus,
-        errorName: outerResult.errorName,
-      });
-      process.exitCode = 2;
-      return;
-    }
-
-    const observed = await waitForDetachedRejection(detachedRejection);
-    if (!observed) {
+    if (outerStatus === 'timeout') {
       emit({
         status: 'timeout',
         outerStatus,
-        returnedSameRoot: outerResult.returnedSameRoot,
+        detachedRejections,
       });
       process.exitCode = 3;
       return;
     }
 
     await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    if (detachedRejections.length > 0) {
+      emit({
+        status: 'detached-rejection',
+        outerStatus,
+        detachedRejections,
+      });
+      process.exitCode = 4;
+      return;
+    }
+
+    if (outerStatus === 'resolved') {
+      emit({
+        status: 'unexpected-outer-resolution',
+        outerStatus,
+        returnedSameRoot: outerResult.value === root,
+        detachedRejections,
+      });
+      process.exitCode = 5;
+      return;
+    }
+
+    const outerErrorName = errorName(outerResult.error);
+    if (outerErrorName !== 'SyntaxError') {
+      emit({
+        status: 'unexpected-outer-rejection',
+        outerStatus,
+        outerErrorName,
+        detachedRejections,
+      });
+      process.exitCode = 6;
+      return;
+    }
+
     emit({
-      status: 'characterized',
+      status: 'propagated',
       outerStatus,
-      returnedSameRoot: outerResult.returnedSameRoot,
-      outerResolvedBeforeDetachedRejection,
+      outerErrorName,
       detachedRejections,
     });
   } finally {

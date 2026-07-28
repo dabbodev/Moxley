@@ -270,7 +270,7 @@ class DB { // DataBase (root node)
                     this._template = this._parent._childTemplate
                 }
             }
-            fs.readdirSync(loc).forEach(async (entry) => {
+            for (const entry of fs.readdirSync(loc)) {
                 var dot = entry.indexOf('.')
                 if (dot == -1) {
                     var next = this._loc + '/' + entry + '/'
@@ -283,7 +283,7 @@ class DB { // DataBase (root node)
                         this[entry] = new Tupac(this, entry).dc
                     }
                 } 
-            })
+            }
         }
         return this
     }
