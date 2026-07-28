@@ -148,7 +148,7 @@ function runDetachedFailureWorker(testDirectory) {
 }
 
 test(
-  'awaiting _loadFromDir resolves before a gated descendant load completes',
+  'awaiting _loadFromDir establishes complete recursive readiness',
   { timeout: 15_000 },
   async (t) => {
     const testDirectory = await createTestDirectory(t);
@@ -204,7 +204,8 @@ test(
       );
       await new Promise((resolve) => setImmediate(resolve));
 
-      assert.equal(outerStatus, 'resolved');
+      assert.equal(descendantGate.settled, false);
+      assert.equal(outerStatus, 'pending');
       assert.equal(descendantCompleted.settled, false);
       assert.equal(root._children.length, 0);
       assert.equal(root.descendant, null);
@@ -221,6 +222,7 @@ test(
       }
     }
 
+    assert.equal(descendantGate.settled, true);
     const outerResult = await withTimeout(outerSettlement, 'outer load');
     assert.deepEqual(outerResult, {
       status: 'resolved',
@@ -232,18 +234,17 @@ test(
 );
 
 test(
-  'descendant load failure is detached from the returned _loadFromDir promise',
+  'descendant load failure rejects the returned _loadFromDir promise',
   { timeout: 15_000 },
   async (t) => {
     const testDirectory = await createTestDirectory(t);
     const result = await runDetachedFailureWorker(testDirectory);
 
     assert.deepEqual(result, {
-      status: 'characterized',
-      outerStatus: 'resolved',
-      returnedSameRoot: true,
-      outerResolvedBeforeDetachedRejection: true,
-      detachedRejections: [{ name: 'SyntaxError' }],
+      status: 'propagated',
+      outerStatus: 'rejected',
+      outerErrorName: 'SyntaxError',
+      detachedRejections: [],
     });
   },
 );
