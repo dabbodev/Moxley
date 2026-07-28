@@ -1,11 +1,18 @@
 'use strict';
 
 const assert = require('node:assert/strict');
-const { mkdtemp, readdir, readFile, rm, stat } = require('node:fs/promises');
+const {
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 const { test } = require('node:test');
-const { parse } = require('flatted');
+const { parse, stringify } = require('flatted');
 
 const Moxley = require('..');
 
@@ -56,7 +63,7 @@ async function createChildStateScenario(t) {
 }
 
 test(
-  'named child state is written with provisional id and name',
+  'named child state is persisted with finalized id and name',
   { timeout: TEST_TIMEOUT_MS },
   async (t) => {
     const { databaseDirectory, root } =
@@ -68,7 +75,7 @@ test(
 
     const child = root._create('descendant');
     const entries = (await readdir(databaseDirectory)).sort();
-    const provisionalPersistedChildState = parse(
+    const persistedChildState = parse(
       (await readFile(childStatePath)).toString('utf8'),
     );
     const rootState = parse(
@@ -83,15 +90,15 @@ test(
     assert.deepEqual(child._bindings, []);
 
     assert.equal((await stat(childStatePath)).isFile(), true);
-    assert.equal(provisionalPersistedChildState._loc, child._loc);
+    assert.equal(persistedChildState._loc, child._loc);
     assert.equal(
-      path.resolve(provisionalPersistedChildState._loc),
+      path.resolve(persistedChildState._loc),
       path.resolve(childDirectory),
     );
-    assert.equal(provisionalPersistedChildState._id, '0');
-    assert.equal(provisionalPersistedChildState._name, 'root');
-    assert.deepEqual(provisionalPersistedChildState._keys, []);
-    assert.deepEqual(provisionalPersistedChildState._bindings, []);
+    assert.equal(persistedChildState._id, '0/0');
+    assert.equal(persistedChildState._name, 'descendant');
+    assert.deepEqual(persistedChildState._keys, []);
+    assert.deepEqual(persistedChildState._bindings, []);
 
     assert.equal(root._children.length, 1);
     assert.strictEqual(root._children[0], child);
@@ -106,7 +113,7 @@ test(
 );
 
 test(
-  'reopen reconstructs the provisional child name and creates a root binding artifact',
+  'reopen preserves the finalized child name without a root binding artifact',
   { timeout: TEST_TIMEOUT_MS },
   async (t) => {
     const { databaseDirectory, databasePath, root } =
@@ -125,10 +132,6 @@ test(
     const loadResult = await reopenedRoot._loadFromDir();
     const reconstructedChild = reopenedRoot._children[0];
     const afterEntries = (await readdir(databaseDirectory)).sort();
-    const beforeEntrySet = new Set(beforeEntries);
-    const addedEntries = afterEntries.filter(
-      (entry) => !beforeEntrySet.has(entry),
-    );
     const afterRootStateBytes = await readFile(rootStatePath);
     const reparsedRootState = parse(
       afterRootStateBytes.toString('utf8'),
@@ -137,32 +140,79 @@ test(
     assert.strictEqual(loadResult, reopenedRoot);
     assert.equal(reopenedRoot._children.length, 1);
     assert.equal(reconstructedChild._id, '0/0');
-    assert.equal(reconstructedChild._name, 'root');
-    assert.notEqual(reconstructedChild._name, 'descendant');
+    assert.equal(reconstructedChild._name, 'descendant');
     assert.deepEqual(reconstructedChild._keys, []);
     assert.deepEqual(reconstructedChild._bindings, []);
     assert.strictEqual(reopenedRoot.descendant, reconstructedChild);
-    assert.deepEqual(reopenedRoot._keys, ['descendant', 'root']);
+    assert.deepEqual(reopenedRoot._keys, ['descendant']);
 
     assert.deepEqual(beforeEntries, [
       '0',
       '_state.ms',
       'descendant.ml',
     ]);
-    assert.deepEqual(afterEntries, [
-      '0',
-      '_state.ms',
-      'descendant.ml',
-      'root.ml',
-    ]);
-    assert.deepEqual(addedEntries, ['root.ml']);
-    assert.equal((await readFile(rootLinkPath, 'utf8')), '0/0');
+    assert.deepEqual(afterEntries, beforeEntries);
     assert.equal((await readFile(namedLinkPath, 'utf8')), '0/0');
+    await assert.rejects(
+      stat(rootLinkPath),
+      (error) => error && error.code === 'ENOENT',
+    );
     await assert.rejects(
       stat(secondDirectory),
       (error) => error && error.code === 'ENOENT',
     );
     assert.deepEqual(afterRootStateBytes, beforeRootStateBytes);
     assert.deepEqual(reparsedRootState._keys, ['descendant']);
+  },
+);
+
+test(
+  'reopen leaves historical provisional child state bytes unchanged',
+  { timeout: TEST_TIMEOUT_MS },
+  async (t) => {
+    const { databaseDirectory, databasePath, root } =
+      await createChildStateScenario(t);
+    const childStatePath = path.join(
+      databaseDirectory,
+      '0',
+      '_state.ms',
+    );
+    const namedLinkPath = path.join(databaseDirectory, 'descendant.ml');
+    const rootLinkPath = path.join(databaseDirectory, 'root.ml');
+    const secondDirectory = path.join(databaseDirectory, '1');
+
+    const child = root._create('descendant');
+    await writeFile(
+      childStatePath,
+      stringify({
+        _loc: child._loc,
+        _id: '0',
+        _name: 'root',
+        _keys: [],
+        _bindings: [],
+      }),
+    );
+    const historicalChildStateBytes = await readFile(childStatePath);
+    const namedLinkBytes = await readFile(namedLinkPath);
+
+    const reopenedDatabase = new Moxley(databasePath);
+    const reopenedRoot = reopenedDatabase.db;
+    const loadResult = await reopenedRoot._loadFromDir();
+    const reconstructedChild = reopenedRoot._children[0];
+    const afterChildStateBytes = await readFile(childStatePath);
+    const afterNamedLinkBytes = await readFile(namedLinkPath);
+
+    assert.strictEqual(loadResult, reopenedRoot);
+    assert.equal(reopenedRoot._children.length, 1);
+    assert.equal(reconstructedChild._name, 'root');
+    assert.deepEqual(afterChildStateBytes, historicalChildStateBytes);
+    assert.deepEqual(afterNamedLinkBytes, namedLinkBytes);
+    assert.equal(afterNamedLinkBytes.toString('utf8'), '0/0');
+    assert.equal((await stat(rootLinkPath)).isFile(), true);
+    assert.equal((await readFile(rootLinkPath, 'utf8')), '0/0');
+    await assert.rejects(
+      stat(secondDirectory),
+      (error) => error && error.code === 'ENOENT',
+    );
   },
 );

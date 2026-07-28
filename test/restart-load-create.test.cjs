@@ -24,7 +24,7 @@ const EXPECTED_LOAD_CREATE = {
   loadReturnedSameRoot: true,
   beforeChildCount: 1,
   beforeChildIds: ['0/0'],
-  beforeChildNames: ['root'],
+  beforeChildNames: ['descendant'],
   beforeNamedChildIndex: 0,
   beforeNamedIsReconstructed: true,
   createdReturnedObject: true,
@@ -33,7 +33,7 @@ const EXPECTED_LOAD_CREATE = {
   createdName: 'descendant',
   afterChildCount: 2,
   afterChildIds: ['0/0', '0/1'],
-  afterChildNames: ['root', 'descendant'],
+  afterChildNames: ['descendant', 'descendant'],
   afterFirstIsReconstructed: true,
   afterSecondIsCreated: true,
   afterNamedChildIndex: 0,
@@ -46,7 +46,7 @@ const EXPECTED_INSPECT = {
   loadReturnedSameRoot: true,
   childCount: 2,
   childIds: ['0/0', '0/1'],
-  childNames: ['root', 'root'],
+  childNames: ['descendant', 'descendant'],
   namedChildIndex: 0,
   namedIsFirst: true,
   namedIsSecond: false,
@@ -262,7 +262,6 @@ test(
       '1',
       '_state.ms',
       'descendant.ml',
-      'root.ml',
     ]);
     assert.deepEqual(addedDirectories, ['1']);
     assert.equal(
@@ -283,8 +282,12 @@ test(
     );
     assert.deepEqual(finalNamedLinkBytes, initialNamedLinkBytes);
     assert.equal(finalNamedLinkBytes.toString('utf8'), '0/0');
-    assert.notDeepEqual(finalRootStateBytes, initialRootStateBytes);
-    assert.deepEqual(finalRootState._keys, ['descendant', 'root']);
+    await assert.rejects(
+      stat(path.join(databaseDirectory, 'root.ml')),
+      (error) => error && error.code === 'ENOENT',
+    );
+    assert.deepEqual(finalRootStateBytes, initialRootStateBytes);
+    assert.deepEqual(finalRootState._keys, ['descendant']);
   },
 );
 
@@ -318,6 +321,12 @@ test(
     const afterInspectRootStateBytes = await readFile(rootStatePath);
 
     assert.deepEqual(afterInspectEntries, beforeInspectEntries);
+    assert.deepEqual(beforeInspectEntries, [
+      '0',
+      '1',
+      '_state.ms',
+      'descendant.ml',
+    ]);
     await assert.rejects(
       stat(path.join(databaseDirectory, '2')),
       (error) => error && error.code === 'ENOENT',

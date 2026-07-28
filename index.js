@@ -26,6 +26,7 @@ class DB { // DataBase (root node)
             newChild._template = this._childTemplate
             newChild._initTemplate()
         }
+        newChild._saveState()
         this._updateBindings(newChild)
         this._saveState()
         return newChild
