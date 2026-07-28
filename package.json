@@ -4,7 +4,7 @@
   "description": "A flexible class based database system for complicated schemas",
   "main": "index.js",
   "scripts": {
-    "test": "node --test test/load-readiness.test.cjs test/repeated-load-mutation.test.cjs"
+    "test": "node --test test/load-readiness.test.cjs test/repeated-load-mutation.test.cjs test/duplicate-create.test.cjs"
   },
   "keywords": [
     "database",
