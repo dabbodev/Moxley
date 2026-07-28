@@ -1,4 +1,5 @@
 var fs = require('fs');
+const path = require('path');
 const {parse, stringify} = require('flatted');
 
 class DB { // DataBase (root node)
@@ -276,9 +277,14 @@ class DB { // DataBase (root node)
                     var next = this._loc + '/' + entry + '/'
                     statecheck = next + '_state.ms'
                     if (fs.existsSync(statecheck)) {
-                        var childstate = await this._loadState(next)
-                        var i = this._children.push(new WillSmith({}, this, childstate._name).dn) - 1
-                        await this._children[i]._loadFromDir()
+                        var existingChild = this._children.find((child) => path.resolve(child._loc) === path.resolve(next))
+                        if (existingChild) {
+                            await existingChild._loadFromDir()
+                        } else {
+                            var childstate = await this._loadState(next)
+                            var i = this._children.push(new WillSmith({}, this, childstate._name).dn) - 1
+                            await this._children[i]._loadFromDir()
+                        }
                     } else {
                         this[entry] = new Tupac(this, entry).dc
                     }
