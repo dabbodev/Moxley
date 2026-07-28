@@ -6,7 +6,7 @@ David Giles is the sole copyright holder of the original Moxley code, excluding 
 
 ## Current repository license
 
-Moxley repository work from the commit that introduces this licensing record forward is licensed under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0.html), unless a particular file explicitly states otherwise.
+The Moxley repository snapshot containing this licensing record—including the pre-existing original Moxley code present in that snapshot—and subsequent Moxley repository work is licensed under the [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0.html), unless a particular file explicitly states otherwise.
 
 ## Historical `moxley-db@3.2.0` clarification
 
@@ -47,7 +47,7 @@ Official license texts:
 
 The npm tarball is the exact published artifact identified by the SHA-1 and SRI above. The `gitHead` value records associated source provenance and resolves to the linked repository commit; it is not a claim that the commit and tarball are byte-identical.
 
-The published tarball's `package.json` records version `3.2.0`, while `package.json` at the associated `gitHead` records version `3.1.1`. The other five files in that six-file tarball match their corresponding Git blobs at the associated commit. This verified manifest difference is preserved in this record rather than treating the tarball and commit as identical.
+The published tarball's `package.json` records version `3.2.0`, while `package.json` at the associated `gitHead` records version `3.1.1`. After CRLF/LF line-ending normalization, the other five files in that six-file tarball match their corresponding Git blobs at the associated commit. The tarball's `package.json` matches after the same line-ending normalization and changing only the version from `3.2.0` to `3.1.1`. These verified framing and manifest differences are preserved in this record rather than treating the tarball and commit as byte-identical.
 
 Neither npm nor GitHub metadata is asserted to have independently resolved the historical licensing conflict. This clarification records the copyright holder's express licensing decision.
 
