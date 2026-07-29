@@ -38,6 +38,8 @@ const PROPOSED_CHILD_NODE_UUID =
 // The fixed _loc values are characterization sentinels, not user paths.
 // These fixture trees are synthetic exemplars, not archived user databases,
 // and are deliberately never passed to the Moxley constructor or loader.
+// The proposed-v1-locless tree intentionally contains no location or
+// deployment-root value.
 const CHARACTERIZATION_FIXTURES = Object.freeze({
   'historical-root-shape/_state.ms': {
     byteLength: 131,
@@ -117,6 +119,24 @@ const CHARACTERIZATION_FIXTURES = Object.freeze({
     sha256:
       'b454f82c5857ebabf342b7258e5cf7def78b7cd975814119462973de9a38df10',
   },
+  'proposed-v1-locless/_state.ms': {
+    byteLength: 183,
+    finalByte: 0x5d,
+    sha256:
+      'ec17ecdd597629245bc9dedf4900fccf8f2f12fb01758e821f11b23ec930c80e',
+  },
+  'proposed-v1-locless/0/_state.ms': {
+    byteLength: 166,
+    finalByte: 0x5d,
+    sha256:
+      '3edd861f5f51257021f27b3895139b7468f13da45ab44d0471b0a7e4edf0bd80',
+  },
+  'proposed-v1-locless/descendant.ml': {
+    byteLength: 36,
+    finalByte: 0x32,
+    sha256:
+      'b454f82c5857ebabf342b7258e5cf7def78b7cd975814119462973de9a38df10',
+  },
 });
 
 const PROPOSED_MARKER_CLASSIFICATION = Object.freeze({
@@ -136,6 +156,12 @@ const PROPOSED_IDENTITY_CLASSIFICATION = Object.freeze({
   parentMismatch: 'parent-id-mismatch',
   invalidLinkBytes: 'invalid-named-link-bytes',
   danglingLink: 'dangling-named-link',
+});
+
+const PROPOSED_LOCLESS_CLASSIFICATION = Object.freeze({
+  exact: 'exact-proposed-version-1-locless-state',
+  invalidLocation: 'persisted-node-location',
+  invalidMarker: 'invalid-root-only-marker',
 });
 
 function hasOwn(value, key) {
@@ -262,6 +288,78 @@ function classifyProposedIdentityForCharacterization({
   return PROPOSED_IDENTITY_CLASSIFICATION.exact;
 }
 
+function classifyProposedLoclessStateForCharacterization(evidence) {
+  const {
+    root,
+    child,
+    linkBytes,
+    physicalSlot = '0',
+    aliasKey = 'descendant',
+  } = evidence;
+
+  if (
+    (
+      root !== null &&
+      typeof root === 'object' &&
+      hasOwn(root, '_loc')
+    ) ||
+    (
+      child !== null &&
+      typeof child === 'object' &&
+      hasOwn(child, '_loc')
+    )
+  ) {
+    return PROPOSED_LOCLESS_CLASSIFICATION.invalidLocation;
+  }
+
+  if (
+    classifyProposedRootMarkerForCharacterization(root) !==
+      PROPOSED_MARKER_CLASSIFICATION.exact ||
+    (
+      child !== null &&
+      typeof child === 'object' &&
+      (
+        hasOwn(child, '_format') ||
+        hasOwn(child, '_formatVersion')
+      )
+    )
+  ) {
+    return PROPOSED_LOCLESS_CLASSIFICATION.invalidMarker;
+  }
+
+  const physicalParentId = hasOwn(evidence, 'physicalParentId')
+    ? evidence.physicalParentId
+    : root?._id;
+  const identityClassification =
+    classifyProposedIdentityForCharacterization({
+      root,
+      children: [
+        {
+          state: child,
+          physicalParentId,
+          physicalSlot,
+        },
+      ],
+      links: [
+        {
+          aliasKey,
+          bytes: linkBytes,
+        },
+      ],
+    });
+
+  if (
+    identityClassification !==
+      PROPOSED_IDENTITY_CLASSIFICATION.exact
+  ) {
+    return identityClassification;
+  }
+
+  // Deployment-root labels are deliberately not read. They are not
+  // persisted evidence and cannot affect this characterization result.
+  return PROPOSED_LOCLESS_CLASSIFICATION.exact;
+}
+
 async function enumerateCharacterizationFixturePaths(
   directory = STATE_PREIMAGE_FIXTURE_ROOT,
 ) {
@@ -316,6 +414,30 @@ async function readProposedIdentityFixtureEvidence() {
   return {
     root: parseCharacterizationState(rootBytes),
     child: parseCharacterizationState(childBytes),
+    linkBytes,
+  };
+}
+
+// The locless fixture is synthetic contract-characterization evidence. It is
+// not runtime-generated, loadable, released, qualified, portable, or durable
+// state. Only these exact files are read; no Moxley constructor, loader,
+// path resolution, or runtime tree traversal is used.
+async function readProposedLoclessFixtureEvidence() {
+  const [rootBytes, childBytes, linkBytes] = await Promise.all([
+    readCharacterizationFixture('proposed-v1-locless/_state.ms'),
+    readCharacterizationFixture(
+      'proposed-v1-locless/0/_state.ms',
+    ),
+    readCharacterizationFixture(
+      'proposed-v1-locless/descendant.ml',
+    ),
+  ]);
+
+  return {
+    root: parseCharacterizationState(rootBytes),
+    child: parseCharacterizationState(childBytes),
+    rootBytes,
+    childBytes,
     linkBytes,
   };
 }
@@ -1267,6 +1389,265 @@ test(
         ),
       ),
       PROPOSED_IDENTITY_CLASSIFICATION.parentMismatch,
+    );
+  },
+);
+
+test(
+  'proposed version-1 locless preimage omits persisted locations',
+  async () => {
+    const loclessPaths = (
+      await enumerateCharacterizationFixturePaths()
+    ).filter((relativePath) => (
+      relativePath.startsWith('proposed-v1-locless/')
+    ));
+    assert.deepEqual(loclessPaths, [
+      'proposed-v1-locless/0/_state.ms',
+      'proposed-v1-locless/_state.ms',
+      'proposed-v1-locless/descendant.ml',
+    ]);
+
+    const {
+      root,
+      child,
+      rootBytes,
+      childBytes,
+      linkBytes,
+    } = await readProposedLoclessFixtureEvidence();
+    const allBytes = [rootBytes, childBytes, linkBytes];
+
+    assert.deepEqual(root, {
+      _id: PROPOSED_ROOT_NODE_UUID,
+      _parentId: null,
+      _name: 'root',
+      _keys: ['descendant'],
+      _bindings: [],
+      _format: 'moxley-db',
+      _formatVersion: 1,
+    });
+    assert.deepEqual(child, {
+      _id: PROPOSED_CHILD_NODE_UUID,
+      _parentId: PROPOSED_ROOT_NODE_UUID,
+      _name: 'descendant',
+      _keys: [],
+      _bindings: [],
+    });
+    assert.equal(hasOwn(root, '_loc'), false);
+    assert.equal(hasOwn(child, '_loc'), false);
+
+    for (const bytes of allBytes) {
+      const text = STRICT_UTF8_DECODER.decode(bytes);
+      assert.equal(text.includes('_loc'), false);
+      assert.equal(
+        text.includes(CHARACTERIZATION_SENTINEL_ROOT),
+        false,
+      );
+      assert.equal(text.includes('/'), false);
+      assert.equal(text.includes('\\'), false);
+    }
+
+    assert.equal(
+      classifyProposedLoclessStateForCharacterization({
+        root,
+        child,
+        linkBytes,
+      }),
+      PROPOSED_LOCLESS_CLASSIFICATION.exact,
+    );
+  },
+);
+
+test(
+  'persisted root or child location invalidates locless characterization',
+  async () => {
+    const {
+      root,
+      child,
+      linkBytes,
+    } = await readProposedLoclessFixtureEvidence();
+    const locationMutations = [
+      {
+        name: 'absolute string',
+        value: '/untrusted/absolute',
+      },
+      {
+        name: 'relative string',
+        value: '../untrusted-relative',
+      },
+      {
+        name: 'empty string',
+        value: '',
+      },
+      {
+        name: 'null',
+        value: null,
+      },
+      {
+        name: 'scalar',
+        value: 17,
+      },
+      {
+        name: 'object',
+        value: { untrusted: true },
+      },
+    ];
+
+    for (const mutation of locationMutations) {
+      assert.equal(
+        classifyProposedLoclessStateForCharacterization({
+          root: {
+            ...root,
+            _loc: mutation.value,
+          },
+          child,
+          linkBytes,
+        }),
+        PROPOSED_LOCLESS_CLASSIFICATION.invalidLocation,
+        `root ${mutation.name}`,
+      );
+      assert.equal(
+        classifyProposedLoclessStateForCharacterization({
+          root,
+          child: {
+            ...child,
+            _loc: mutation.value,
+          },
+          linkBytes,
+        }),
+        PROPOSED_LOCLESS_CLASSIFICATION.invalidLocation,
+        `child ${mutation.name}`,
+      );
+    }
+  },
+);
+
+test(
+  'deployment root changes do not alter locless persisted identity evidence',
+  async () => {
+    const evidence = await readProposedLoclessFixtureEvidence();
+    const deploymentRootLabels = [
+      'opaque-deployment-root-alpha',
+      'opaque-deployment-root-beta',
+    ];
+    const classifications = deploymentRootLabels.map(
+      (deploymentRoot) => (
+        classifyProposedLoclessStateForCharacterization({
+          ...evidence,
+          deploymentRoot,
+        })
+      ),
+    );
+
+    assert.deepEqual(classifications, [
+      PROPOSED_LOCLESS_CLASSIFICATION.exact,
+      PROPOSED_LOCLESS_CLASSIFICATION.exact,
+    ]);
+    assert.equal(evidence.root._id, PROPOSED_ROOT_NODE_UUID);
+    assert.equal(evidence.child._id, PROPOSED_CHILD_NODE_UUID);
+    assert.equal(
+      evidence.child._parentId,
+      evidence.root._id,
+    );
+
+    for (const label of deploymentRootLabels) {
+      assert.equal(evidence.rootBytes.includes(label), false);
+      assert.equal(evidence.childBytes.includes(label), false);
+      assert.equal(evidence.linkBytes.includes(label), false);
+    }
+  },
+);
+
+test(
+  'same-parent physical slot relabeling does not alter locless identity',
+  async () => {
+    const {
+      root,
+      child,
+      linkBytes,
+    } = await readProposedLoclessFixtureEvidence();
+    const originalIdentity = {
+      rootId: root._id,
+      childId: child._id,
+      parentId: child._parentId,
+      linkTarget: STRICT_UTF8_DECODER.decode(linkBytes),
+    };
+    const differentParentId =
+      '33333333-3333-4333-8333-333333333333';
+
+    assert.equal(
+      classifyProposedLoclessStateForCharacterization({
+        root,
+        child,
+        linkBytes,
+        physicalSlot: '0',
+      }),
+      PROPOSED_LOCLESS_CLASSIFICATION.exact,
+    );
+    assert.equal(
+      classifyProposedLoclessStateForCharacterization({
+        root,
+        child,
+        linkBytes,
+        physicalSlot: 'same-parent-renamed-slot',
+      }),
+      PROPOSED_LOCLESS_CLASSIFICATION.exact,
+    );
+    assert.deepEqual(
+      {
+        rootId: root._id,
+        childId: child._id,
+        parentId: child._parentId,
+        linkTarget: STRICT_UTF8_DECODER.decode(linkBytes),
+      },
+      originalIdentity,
+    );
+    assert.equal(
+      classifyProposedLoclessStateForCharacterization({
+        root,
+        child,
+        linkBytes,
+        physicalParentId: differentParentId,
+        physicalSlot: 'different-parent-slot',
+      }),
+      PROPOSED_IDENTITY_CLASSIFICATION.parentMismatch,
+    );
+  },
+);
+
+test(
+  'locless preimage retains UUID ownership and exact named-link evidence',
+  async () => {
+    const {
+      root,
+      child,
+      linkBytes,
+    } = await readProposedLoclessFixtureEvidence();
+
+    assert.equal(root._id, PROPOSED_ROOT_NODE_UUID);
+    assert.equal(child._id, PROPOSED_CHILD_NODE_UUID);
+    assert.notEqual(root._id, child._id);
+    assert.equal(CANONICAL_UUID_V4_PATTERN.test(root._id), true);
+    assert.equal(CANONICAL_UUID_V4_PATTERN.test(child._id), true);
+    assert.equal(root._parentId, null);
+    assert.equal(child._parentId, root._id);
+    assert.equal(
+      classifyProposedRootMarkerForCharacterization(root),
+      PROPOSED_MARKER_CLASSIFICATION.exact,
+    );
+    assert.equal(hasOwn(child, '_format'), false);
+    assert.equal(hasOwn(child, '_formatVersion'), false);
+    assert.deepEqual(
+      linkBytes,
+      Buffer.from(PROPOSED_CHILD_NODE_UUID, 'utf8'),
+    );
+    assert.equal(linkBytes.length, 36);
+    assert.equal(
+      classifyProposedLoclessStateForCharacterization({
+        root,
+        child,
+        linkBytes,
+      }),
+      PROPOSED_LOCLESS_CLASSIFICATION.exact,
     );
   },
 );
