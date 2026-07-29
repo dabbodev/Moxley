@@ -1,16 +1,17 @@
 # Moxley State Compatibility Policy
 
-Status: Marker selected and byte separability characterized; version-1
-qualification is a no-go pending owner decisions; runtime support remains
+Status: Marker separability and future node identity selected; version-1
+qualification remains a no-go pending other decisions; runtime support remains
 unimplemented.
 Date: 2026-07-28
 Historical behavior baseline: `518ab5ab58500a84246770e8ef0180856e127abd`
 Discriminator decision input baseline: `635a7c09bcca63c3abbb52d5c2fbbce4b87a9817`
 Persisted-evidence inventory baseline: `3368824d8ab58d6ce8a5964b2acb8c846823430e`
+Node-identity decision input baseline: `a2b06a9eecec16aa55869be1748dd03edff6b2ba`
 Decision authority: David Giles, sole owner of Moxley
 
-These repository baselines are evidence and decision inputs. Neither is a
-persisted-format version, package release, or prediction of an eventual merge
+These repository baselines are evidence and decision inputs. None is a
+persisted-format version, package release, or prediction of a later merge
 commit.
 
 ## 1. Historical evidence
@@ -216,9 +217,9 @@ version-1 qualification evidence.
 
 | Category | Writer | Reader and exact known logical shape | Relationships | Execution and mutation boundary | Current validation and evidence | Version-1 disposition and missing decision |
 | --- | --- | --- | --- | --- | --- | --- |
-| Root and child node state: `_state.ms` | **Source fact:** `DB._saveState()` writes `flatted.stringify(state)`. Current fields, in writer order, are `_loc`, `_id`, `_name`, `_keys`, `_bindings`, plus optional `_childTemplate` containing another flatted string. **Selected authority:** a future version-1 root adds exact `_format: "moxley-db"` and integer `_formatVersion: 1`; children must not carry them. | **Source fact:** `DB._loadState()` parses `_state.ms`; `_loadFromDir()` copies root `_keys` and `_bindings`, reconstructs optional `_childTemplate`, and reads child `_name` before constructor-backed reconstruction. Current master does not write or enforce the marker. | `_loc` names a physical runtime path; `_id` is root `0` or a positional child path; `_name` supplies the reconstructed child name; `_keys` names node evidence; `_bindings` contains collection IDs; child directories are expected to match child positions. | Parsing ordinary fields does not itself execute code. Reconstructing `_childTemplate` creates function-source-bearing template state. `DB`, child, proxy, and collection constructors are filesystem-mutation-capable: missing inferred locations can be created and proxy assignments can persist files. | **Test or fixture evidence:** PR #14 fixes root, historical-child, corrected-child, and root-marker preimages. Other tests characterize recursive readiness, parse-failure propagation, restart reconstruction, and duplicate positional children. **Source fact:** load does not comprehensively validate field presence/types, stored `_loc`, stored `_id`, parent/child agreement, `_keys`, or `_bindings`. | **Unresolved.** The marker shape is selected and separable, but the complete state schema, location ownership, identity rules, binding rules, and accepted feature set are not. |
+| Root and child node state: `_state.ms` | **Source fact:** `DB._saveState()` writes `flatted.stringify(state)`. Current fields, in writer order, are `_loc`, `_id`, `_name`, `_keys`, `_bindings`, plus optional `_childTemplate` containing another flatted string. **Selected authority:** a future version-1 root adds exact `_format: "moxley-db"` and integer `_formatVersion: 1`; every future version-1 node has UUID `_id` and `_parentId`. | **Source fact:** `DB._loadState()` parses `_state.ms`; `_loadFromDir()` copies root `_keys` and `_bindings`, reconstructs optional `_childTemplate`, and reads child `_name` before constructor-backed reconstruction. It does not preserve a saved child `_id`. Current master does not write or enforce the marker, UUID, or `_parentId` contract. | Current `_loc` names a physical runtime path; current `_id` is root `0` or a positional child path; `_name` supplies the reconstructed child name; `_keys` names node evidence; `_bindings` contains collection IDs. Future version-1 physical parentage is selected through `_parentId`, independently of slot names. | Parsing ordinary fields does not itself execute code. Reconstructing `_childTemplate` creates function-source-bearing template state. `DB`, child, proxy, and collection constructors are filesystem-mutation-capable: missing inferred locations can be created and proxy assignments can persist files. | **Test or fixture evidence:** PR #14 fixes root, historical-child, corrected-child, and marker-only preimages. Other tests characterize recursive readiness, parse-failure propagation, restart reconstruction, and duplicate positional children. **Source fact:** current load does not comprehensively validate field presence/types, stored `_loc`, stored `_id`, parent/child agreement, `_keys`, or `_bindings`. | **Partially selected for future version 1:** node UUID and `_parentId` semantics are defined below. Serialization, loading, generation, validation, location ownership, collection identity, and the complete accepted schema remain unimplemented or unresolved. |
 | Node data: `*.md` | **Source fact:** the proxy `set` path writes `flatted.stringify(value)` to `<key>.md` and adds a new property name to node `_keys`. | **Source fact:** proxy `get` lazily reads and `flatted.parse`s `<key>.md` when the property is not already materialized. The logical value is any value accepted by the current flatted writer; no narrower persisted schema is selected. | Each filename stem is intended to correspond to one `_keys` entry on the containing node. | Lazy data parsing does not call `eval`. Ordinary construction and later proxy writes remain mutation-capable, but a future preflight must not use them. | No PR #14 fixture contains `*.md`. Current loading does not prove a one-to-one relation between `_keys` and data/link/function files, reject extra evidence, or reject missing or multiply typed evidence for one key. | **Unresolved.** A serializable-data schema, filename/key rules, conflict rules, and flatted-value limits require contract evidence. |
-| Named node links: `*.ml` | **Source fact:** assigning a node through the proxy writes the target node's textual `_id` to `<key>.ml` and adds the stem to parent `_keys`. | **Source fact:** lazy proxy access reads the file as text and resolves it through root `_getById()`. The characterized bytes for `descendant.ml` are exactly `0/0`. | The filename stem is a parent `_keys` entry. The text must designate an existing target under the chosen ID model. `_getById()` traverses numeric child positions. | Reading link text does not evaluate code or directly write, but target resolution depends on a constructor-reconstructed positional graph, and that construction path is mutation-capable. | **Test or fixture evidence:** PR #14 proves byte identity of historical, post-PR #11, and proposed-marker named links. Tests cover the first duplicate named binding remaining `0/0`. There is no whole-tree proof of target uniqueness, target existence, path containment, or persisted-ID consistency. | **Unresolved.** Stable identity and reference semantics are owner decisions. Positional IDs are not declared stable. |
+| Named node links: `*.ml` | **Source fact:** assigning a current node through the proxy writes the target node's textual positional `_id` to `<key>.ml` and adds the stem to parent `_keys`. | **Source fact:** current lazy proxy access reads the file as text and resolves it through root `_getById()`, which traverses numeric child positions. The characterized legacy bytes for `descendant.ml` are exactly `0/0`. | The filename stem is the alias key and a parent `_keys` entry. **Selected authority:** future version-1 node links contain a target UUID and resolve through the complete same-database node-ID index; they are references, not ownership edges. | Reading current link text does not evaluate code or directly write, but target resolution depends on a constructor-reconstructed positional graph, and that construction path is mutation-capable. Future preflight resolution must occur before reconstruction without writes. | **Test or fixture evidence:** PR #14 proves byte identity of historical, post-PR #11, and marker-only named links. Tests cover the first duplicate named binding remaining `0/0`. No existing fixture contains the selected UUID link contract. | **Selected for future version-1 node links only:** exact UUID bytes, same-tree resolution, alias semantics, and failure conditions are defined below. Collection item links, `_bindings`, filename grammar, and runtime enforcement remain deferred. |
 | Stored functions: `*.mf` | **Source fact:** assigning a new function writes `Function.prototype.toString()`-style source through `arg.toString()` and adds the stem to `_keys`. | **Source fact:** lazy proxy access reads the source, passes it to `eval`, binds the resulting function to the origin node, and returns it. | The stem is a node `_keys` entry. Template hooks can store textual function IDs and resolve them through `_findFunction()`, which reaches the same lazy function reader. | Reading the property crosses an `eval` boundary. Calling it or resolving a hook can execute persisted code with node access. The enclosing constructor-backed graph is mutation-capable even before later property writes. | No fixed preimage or automated qualification test covers `*.mf`, source grammar, origin binding, hook reference integrity, or code-execution policy. | **Unresolved and not approved for version 1.** David Giles must explicitly choose whether executable persisted evidence is included, excluded, or governed by a separate trust policy. |
 | Collections: dotless directory, `_colstate.mc`, per-item `*.ml`, and node `_bindings` | **Source fact:** `DC._saveState()` writes a flatted object with `_loc`, `_name`, `_keys`, and `_indexBy`, plus optional `_keySort`, `_itemSort`, and `_accept` function source. Proxy assignment of node items writes textual-ID `*.ml` entries. `DB._bind()` stores collection IDs in node `_bindings`. | **Source fact:** a dotless entry without child `_state.ms` is constructed as a collection. `DC._loadState()` parses `_colstate.mc` and evaluates optional callback sources. `_populate()` is intended to resolve per-item link IDs. A collection ID is derived from parent node ID plus directory/name rather than stored in `_colstate.mc`. | Collection `_keys` correspond to item-link stems; each link should resolve to a node; `_indexBy` influences keys; `_bindings` must resolve to a collection; parent path, collection name, and derived ID must agree. | Collection state loading evaluates callback source. `_accept`, `_keySort`, and `_itemSort` may execute during add/sort behavior. Collection construction can create a missing directory, and proxy-based item insertion can write links and state. | Current tests and PR #14 fixtures do not give collections equivalent reconstruction, readiness, callback, binding, or restart coverage. Current load starts constructor-backed collection state loading without an equivalent complete readiness contract and does not validate its relationships. | **Unresolved.** Optional callback fields are mechanically visible after parsing, but their absence alone does not qualify a “basic” collection: directory classification, lifecycle, IDs, bindings, item links, and readiness remain unproved. Owner authority is required to include collections or reduce the supported feature surface. |
 | Templates: node `_childTemplate` | **Source fact:** `DT` converts `apply` and function-valued nested fields to source strings; `DT.toString()` flatted-serializes `{strict, apply, keys}`; node `_saveState()` embeds that string in `_state.ms`. | **Source fact:** `_loadFromDir()` parses the nested string and constructs `DT`. Template initialization assigns defaults, contains a function-default evaluation branch, evaluates and invokes `apply`, and saves state. Proxy assignment evaluates and invokes validators. Hooks resolve stored function references and invoke them. | The parent carries the child template; newly created children receive it. Nested key rules relate defaults, validators, and hooks to node properties and stored functions. | `apply` and validators cross `eval` and invocation boundaries. Hooks can evaluate and invoke `*.mf`. The source contains a default-function evaluation path, while `DT` serializes function-valued fields to strings; the persisted default-function lifecycle has no qualification proof. Template application writes defaults and state. | No fixed preimage or automated qualification suite covers nested template framing, validator/default/apply/hook reconstruction, rejection behavior, or execution order. | **Unresolved and not approved for version 1.** Executable-template policy, hook/reference semantics, exact nested schema, and lifecycle evidence require owner decisions and dedicated fixtures. |
@@ -231,8 +232,11 @@ The following are **source facts** or direct **inferences** from the matrix:
 - Current `_loc` values encode creator or runtime filesystem paths. They are not
   declared portable.
 - Current child IDs are positional and path-derived. They are not declared
-  stable.
+  stable and are not future version-1 identities.
 - Named links contain textual IDs and depend on that positional graph.
+- Current collection IDs append a collection name to a node path, and current
+  function references append a property name to a node path. Neither form is
+  selected by the future node-only identity decision.
 - Current loading does not fully validate persisted `_loc` or `_id`, nor their
   agreement with physical parent/child placement.
 - `_keys` is used as a logical inventory, but current loading does not prove it
@@ -256,7 +260,7 @@ The following are **source facts** or direct **inferences** from the matrix:
 | 1. Full legacy feature surface | Nodes, data, links, functions, templates, collections, callbacks, and bindings. | Preserves the broad documented feature surface, but current evidence does not close positional identity, stored locations, link integrity, `_keys`, collection lifecycle/readiness, or constructor mutation. It would also accept multiple persisted-code evaluation paths without an approved execution policy. | **No-go under current authority and evidence.** |
 | 2. Initial non-executable subset | Nodes, serializable data, and named links; excludes persisted functions, executable templates, and callback-bearing collection behavior. | Reduces execution exposure, but no owner decision authorizes dropping legacy features from version 1. Callback-bearing and callback-free `_colstate.mc` values can be distinguished at the optional-field level after parsing. That distinction does not reliably qualify a basic collection because collection identity, state, links, bindings, classification, and readiness are unresolved. | **Unresolved.** Requires explicit owner authority for the compatibility reduction and a separate collection decision. |
 | 3. Node/link characterization subset only | Only the root, one child-state relationship, and named-link evidence represented by PR #14 fixtures. | The marker and these fixture shapes are mechanically separable. The subset lacks general data, exhaustive trees, collections, bindings, templates, functions, unexpected-entry rules, and most relationship failures, so it is not a useful general database format. | **Evidence exemplar only; not selected as version 1.** |
-| 4. Prerequisite-first boundary | Defers qualification until identity, persisted-location/relocation ownership, executable-feature policy, and supported collection/feature scope are selected. | Prevents the marker from being mistaken for a complete acceptance contract and preserves owner authority over compatibility reductions. It permits each prerequisite to receive its own fixtures and failure contract before runtime work. | **Recommendation and current gate disposition: no-go pending decisions.** This is not a selection of a reduced format. |
+| 4. Prerequisite-first boundary | Defers qualification until identity, persisted-location/relocation ownership, executable-feature policy, and supported collection/feature scope are selected. | The node identity and named-link prerequisite is selected below. Location, executable-feature, collection, path, and complete-schema prerequisites remain open. This ordering prevents the marker or one closed prerequisite from being mistaken for a complete acceptance contract. | **Current gate disposition: no-go pending the remaining decisions.** This is not a selection of a reduced format. |
 
 ## 12. Future whole-database no-write evidence graph
 
@@ -308,59 +312,222 @@ select deterministic normalized relative-path ordering for the future
 preflight only after confirming that doing so does not change ordinary load
 order or imply current enforcement.
 
-## 14. Explicit deferrals and nonclaims
+## 14. Current identity and link behavior
 
-This record does not select or implement:
+The following are **source facts** about current unversioned behavior. They are
+not the selected future contract:
 
-- the complete accepted version-1 schema or feature surface;
-- stable persisted identity or named-link reference semantics;
-- persisted-location authority, portability, or relocation behavior;
-- executable-code, template, hook, or callback policy;
-- collection support, exclusion, or lifecycle qualification;
-- runtime marker writing or enforcement;
-- production preflight, traversal, reconstruction, or rejection;
-- a public API or exported error type;
-- a stable error code or complete error wire shape;
+- `DB` initializes the root `_id` to `"0"`.
+- `DN` derives its physical directory from `parent._children.length`, calls the
+  base constructor for that location, and only afterward assigns `_parent`,
+  `_root`, positional `_id`, and final `_name`.
+- If that child location did not exist, the base constructor creates the
+  directory and writes provisional root-like state before the child has its
+  finalized metadata. `_create()` later saves the finalized child state.
+- `DN` derives a child `_id` as the parent `_id`, `/`, and the same current
+  child-array length. The child is pushed into `_children` only after that
+  constructor completes.
+- `_loadFromDir()` reads the saved child `_name`, constructs a new child at the
+  next positional slot, and does not assign the saved child `_id`; current load
+  therefore reconstructs positional identity.
+- Proxy assignment of a `DN` writes `arg._id` directly into `<alias>.ml`.
+  Current lazy link access reads those bytes and calls `_getById()`, which
+  splits the value on `/` and traverses `_children` indexes.
+- Creating a named child can create a same-named alias on its parent, while
+  `_link(target, alias)` accepts an independently supplied alias. Current source
+  therefore distinguishes descriptive node name from alias key even though
+  the common creation path makes them equal.
+- `DC` derives a collection `_id` by appending its name to its parent node ID.
+  `_bindings` stores those collection IDs, and `_findCollection()` splits the
+  final path component from the node path.
+- Template hook function references are documented and resolved as a node path
+  plus function property. `_findFunction()` splits that path and delegates the
+  node portion to `_getById()`.
+
+Current tests and fixtures characterize `"0"`, `"0/0"`, `"0/1"`, numeric
+directories, and `0/0` named-link bytes. They do not characterize or implement
+UUID identity. No live field named `_parentId` exists, so the selected field
+does not collide with current serialization.
+
+## 15. Selected future version-1 node-ID wire contract
+
+On 2026-07-28, David Giles selected immutable opaque UUID identity for every
+future version-1 node, including the root.
+
+The logical node-state contract is:
+
+- `_id` is one canonical lowercase UUID version 4 string.
+- Its syntax is exactly:
+
+  ```text
+  ^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$
+  ```
+
+- `_parentId` is exactly `null` for the root.
+- `_parentId` is the canonical UUID of the physical parent for every non-root
+  node.
+- Every `_id` is unique within the complete database tree.
+- An ID is assigned once before that node's first filesystem write.
+- An ID never changes because of close or reopen, directory enumeration order,
+  insertion order, naming, aliasing, or physical-slot renumbering.
+- Callers cannot supply, replace, or mutate a persisted node ID.
+- Loading preserves the exact persisted `_id` instead of reconstructing it.
+- The root has an ordinary node UUID. Version 1 has no reserved `"0"` identity.
+- This slice does not create a separate database UUID.
+- A complete copied database may preserve its node IDs as a clone. Uniqueness
+  is required within each database tree and is not claimed globally across
+  every copy.
+
+`node:crypto.randomUUID()` is the preferred future generator because it
+requires no package dependency. This record does not call or implement it.
+`package.json` currently selects no Node engine floor. Before later runtime
+support, if the supported Node range cannot guarantee `randomUUID()`, David
+Giles must select an explicit engine floor. An unreviewed dependency, weak
+random fallback, or caller-supplied ID is not authorized.
+
+Current positional values such as `"0"` and `"0/0"` are not UUIDs and are not
+version-1 identities.
+
+## 16. Physical ownership semantics
+
+- The root is the only node with `_parentId: null`.
+- Every non-root node has exactly one physical parent.
+- Physical containment is the ownership edge.
+- A non-root `_parentId` must equal the UUID of that physical parent.
+- A node directory name is a physical storage slot only.
+- Numeric directories are storage slots only and are never identity.
+- Directory names, enumeration order, and child-array indexes do not determine
+  `_id`.
+- Duplicate node IDs reject the complete candidate database.
+- A missing or mismatched parent ID rejects the complete candidate database.
+- A non-root node claiming `_parentId: null` is invalid.
+- A root claiming a non-null `_parentId` is invalid.
+- Moving a node beneath another physical parent cannot be accepted silently.
+  It requires a separately designed reparent operation or migration.
+- `_loc` is not identity and must not derive `_id` or `_parentId`.
+- `_loc` authority, relocation, canonicalization, and portability remain
+  unresolved.
+
+This slice does not select a future physical directory naming, allocation,
+reuse, or renumbering algorithm.
+
+## 17. Named node-link semantics
+
+For a future version-1 node `*.ml` link:
+
+- The complete file contents are exactly one canonical node UUID.
+- There is no BOM, whitespace, CR, LF, path, JSON wrapper, or additional field.
+- Resolution uses the complete in-database node-ID index built during
+  read-only preflight.
+- The target must exist exactly once in the same database tree.
+- A missing target is dangling and rejects the candidate database.
+- A malformed UUID rejects the candidate database.
+- A duplicate target ID rejects the database before link resolution.
+- Links never refer to physical paths or positional IDs.
+- Links are aliases or references, not physical ownership edges.
+- Multiple aliases may refer to the same node.
+- An alias may target the root or any other node in the same database.
+- Reference cycles are not ownership cycles and are not rejected solely for
+  being cyclic.
+- The link filename supplies the alias key.
+- The alias key need not equal the target node's `_name`.
+- A named child created through `_create(name)` may create a matching alias,
+  but identity does not depend on that alias.
+- `_name` remains descriptive or creation metadata. It is not identity and is
+  not globally unique.
+- Cross-database links are not supported by this contract.
+
+Collection item links and `_bindings` remain outside this node-link decision
+until collection identity is separately selected. Filename grammar,
+case-folding, reserved-name rules, and path-containment implementation remain
+part of the later path policy.
+
+## 18. Compatibility consequences
+
+- This is a breaking semantic change from unversioned positional IDs.
+- Existing callers may interpret `_id` as a hierarchical path, as the current
+  README describes.
+- No current package release writes or loads the UUID and `_parentId` contract.
+- No existing fixture is retroactively rewritten.
+- The PR #14 proposed-marker fixture remains synthetic marker evidence, not the
+  final version-1 identity fixture.
+- Unversioned databases remain legacy and unqualified.
+- Unversioned positional IDs are never silently upgraded.
+- No deterministic or authorized automatic mapping exists from `"0/0"` or any
+  other positional ID to a UUID.
+- Migration requires an explicit old-to-new mapping ledger and separate owner
+  approval.
+- Package SemVer and release policy remain unselected.
+- Documenting this contract does not qualify version 1.
+
+## 19. Future preflight identity order
+
+A later implementation must validate identity and node links in this order:
+
+1. Parse and validate the exact root marker.
+2. Validate the root `_id` UUID and `_parentId: null`.
+3. Enumerate every physical node without constructing runtime nodes.
+4. Parse each node state.
+5. Validate UUID syntax and build the complete node-ID index.
+6. Reject duplicate IDs.
+7. Validate each physical parent/child edge against `_parentId`.
+8. Only after the node index is complete, parse and resolve node `*.ml` links.
+9. Reject malformed and dangling references.
+10. Only after all identity and reference evidence passes may reconstruction
+    begin.
+
+No constructor, proxy write, `eval`, template application, callback, or
+persisted mutation is allowed during these steps. This slice does not define a
+stable public error class, final error wire shape, or numeric resource limits.
+
+## 20. Explicit deferrals and nonclaims
+
+This record continues to defer:
+
+- `_loc` authority, portability, relocation, and canonicalization;
+- physical directory allocation and renaming;
+- collection identity and collection-item links;
+- `_bindings`;
+- stored functions and `*.mf`;
+- templates, hooks, validators, and callbacks;
+- full `_keys` correspondence;
+- executable-content policy;
+- path, symlink, and junction policy;
+- filename grammar and case-collision policy;
+- locking and concurrent writers;
+- atomicity, recovery, and durability;
+- migration and reparenting;
+- runtime UUID generation, serialization, loading, and validation;
+- a public API, exported error type, or final error wire shape;
 - numeric resource limits;
-- exact symlink, junction, or path-containment implementation;
-- migration, automatic repair, normalization, or legacy conversion;
-- duplicate `_create(name)` behavior;
-- locking, race handling, or concurrent-writer behavior;
-- atomic commits, journaling, recovery, durability, or cancellation;
-- a package release, package-version change, tag, or npm publication; or
+- package version, release, tag, and npm publication; and
 - Moxley adapter or Thoth behavior.
 
-It does not claim that any existing database is version 1, that the synthetic
-marked fixture is accepted, that current master is production-safe, or that
-Moxley reads or writes a supported persisted-format version.
+It does not implement marker writing or enforcement, production preflight,
+identity generation, node reconstruction, link resolution, migration, or
+repair. It does not claim that any existing database is version 1, that the
+synthetic marked fixture is accepted, or that current master reads or writes
+the selected identity contract.
 
-## 15. Version-1 qualification gate: NO-GO
+## 21. Qualification gate and next independently testable slice
 
-The current evidence does not support a complete version-1 qualification
-contract. The selected marker remains necessary and mechanically separable,
-but it is not sufficient. Qualification is blocked on these exact owner or
-contract decisions:
+The node identity and named-link blocker recorded at the persisted-evidence
+inventory baseline is now closed as an owner decision. Complete version-1
+qualification remains a no-go because `_loc` ownership, executable-content
+policy, collection and binding scope, path policy, and the complete accepted
+evidence schema remain unresolved.
 
-1. David Giles must choose whether persisted node identity is positional,
-   topology-derived, or independently stable, and define named-link target,
-   uniqueness, and missing-target semantics.
-2. David Giles must choose whether `_loc` is authoritative persisted identity,
-   derived evidence, a validation hint, or replaceable relocation metadata,
-   including how parent/child physical placement is judged.
-3. David Giles must choose whether version 1 includes persisted executable
-   functions, templates, hooks, validators, defaults, and collection callbacks,
-   excludes them, or requires a separately defined trust policy.
-4. David Giles must choose whether collections and bindings are in the initial
-   version-1 feature surface. If they are, their directory grammar, item-link
-   model, derived identity, readiness, callbacks, and binding relationships
-   need dedicated evidence. If they are not, that compatibility reduction must
-   be explicitly authorized.
-5. After those choices, a bounded contract must define the exact accepted
-   files, logical field types, relationship invariants, unsupported-entry
-   behavior, and read-only traversal evidence before any detector code.
+The next independently testable slice is fixtures and characterization only.
+It should add synthetic proposed version-1 identity fixtures containing:
 
-The next smallest dependency-ordered slice is a documentation-only owner
-decision on persisted node identity and named-link reference semantics. It
-must add no runtime behavior and must not claim version-1 support. Until that
-decision and the remaining prerequisites are closed, version-1 qualification
-remains a no-go.
+- fixed root and child UUIDs;
+- root `_parentId: null`;
+- child `_parentId` equal to the root UUID;
+- an exact UUID-only `descendant.ml`; and
+- mutations for malformed, duplicate, dangling, positional, and
+  mismatched-parent identities.
+
+That later slice must preserve every existing unversioned and marker-only
+fixture byte-for-byte. It must not implement production behavior or claim
+runtime support. Until that evidence and the remaining owner decisions are
+closed, version-1 qualification remains a no-go.
