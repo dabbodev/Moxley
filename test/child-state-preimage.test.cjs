@@ -34,12 +34,17 @@ const PROPOSED_ROOT_NODE_UUID =
   '11111111-1111-4111-8111-111111111111';
 const PROPOSED_CHILD_NODE_UUID =
   '22222222-2222-4222-8222-222222222222';
+const PROPOSED_LOGICAL_ALIAS = 'descendant';
+const PROPOSED_LOGICAL_ALIAS_HEX = '64657363656e64616e74';
+const PROPOSED_ENCODED_LINK_FILENAME =
+  `k_${PROPOSED_LOGICAL_ALIAS_HEX}.ml`;
 
 // The fixed _loc values are characterization sentinels, not user paths.
 // These fixture trees are synthetic exemplars, not archived user databases,
 // and are deliberately never passed to the Moxley constructor or loader.
 // The proposed-v1-locless tree intentionally contains no location or
-// deployment-root value.
+// deployment-root value. The proposed-v1-encoded-names tree is separate
+// synthetic lexical-contract evidence and is likewise never loaded.
 const CHARACTERIZATION_FIXTURES = Object.freeze({
   'historical-root-shape/_state.ms': {
     byteLength: 131,
@@ -137,6 +142,24 @@ const CHARACTERIZATION_FIXTURES = Object.freeze({
     sha256:
       'b454f82c5857ebabf342b7258e5cf7def78b7cd975814119462973de9a38df10',
   },
+  'proposed-v1-encoded-names/_state.ms': {
+    byteLength: 183,
+    finalByte: 0x5d,
+    sha256:
+      'ec17ecdd597629245bc9dedf4900fccf8f2f12fb01758e821f11b23ec930c80e',
+  },
+  'proposed-v1-encoded-names/n_0/_state.ms': {
+    byteLength: 166,
+    finalByte: 0x5d,
+    sha256:
+      '3edd861f5f51257021f27b3895139b7468f13da45ab44d0471b0a7e4edf0bd80',
+  },
+  'proposed-v1-encoded-names/k_64657363656e64616e74.ml': {
+    byteLength: 36,
+    finalByte: 0x32,
+    sha256:
+      'b454f82c5857ebabf342b7258e5cf7def78b7cd975814119462973de9a38df10',
+  },
 });
 
 const PROPOSED_MARKER_CLASSIFICATION = Object.freeze({
@@ -164,8 +187,326 @@ const PROPOSED_LOCLESS_CLASSIFICATION = Object.freeze({
   invalidMarker: 'invalid-root-only-marker',
 });
 
+const LOGICAL_NAME_CLASSIFICATION = Object.freeze({
+  exact: 'canonical-logical-name',
+  invalidType: 'invalid-logical-name-type',
+  invalidScalar: 'invalid-unicode-scalar-value',
+  invalidLength: 'invalid-normalized-utf8-length',
+  invalidHex: 'invalid-canonical-lowercase-hex',
+  invalidUtf8: 'invalid-strict-utf8',
+  nonNfc: 'decoded-logical-name-is-not-nfc',
+  nonCanonical: 'noncanonical-logical-name-round-trip',
+});
+
+const PHYSICAL_ENTRY_CLASSIFICATION = Object.freeze({
+  nodeState: 'accepted-node-state-name',
+  collectionState: 'reserved-unapproved-collection-state-name',
+  nodeSlot: 'accepted-node-slot-name',
+  data: 'accepted-data-key-name',
+  link: 'accepted-node-link-key-name',
+  storedFunction: 'reserved-unapproved-function-key-name',
+  collection: 'reserved-unapproved-collection-directory-name',
+  malformed: 'malformed-canonical-physical-name',
+  unknown: 'unknown-physical-entry',
+});
+
+const PHYSICAL_NAMESPACE_CLASSIFICATION = Object.freeze({
+  distinct: 'distinct-decoded-logical-names',
+  collision: 'duplicate-decoded-logical-name',
+  invalidEntry: 'invalid-physical-entry',
+});
+
+const ROOT_INPUT_CLASSIFICATION = Object.freeze({
+  windowsLocal: 'windows-drive-absolute-local-path',
+  posixLocal: 'posix-absolute-local-path',
+  rejected: 'rejected-root-input-lexical-class',
+});
+
 function hasOwn(value, key) {
   return Object.prototype.hasOwnProperty.call(value, key);
+}
+
+function hasUnpairedSurrogateForCharacterization(value) {
+  for (let index = 0; index < value.length; index += 1) {
+    const codeUnit = value.charCodeAt(index);
+    if (codeUnit >= 0xd800 && codeUnit <= 0xdbff) {
+      if (index + 1 >= value.length) {
+        return true;
+      }
+      const nextCodeUnit = value.charCodeAt(index + 1);
+      if (nextCodeUnit < 0xdc00 || nextCodeUnit > 0xdfff) {
+        return true;
+      }
+      index += 1;
+    } else if (codeUnit >= 0xdc00 && codeUnit <= 0xdfff) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function encodeLogicalNameForCharacterization(logicalName) {
+  if (typeof logicalName !== 'string') {
+    return {
+      classification: LOGICAL_NAME_CLASSIFICATION.invalidType,
+    };
+  }
+
+  if (hasUnpairedSurrogateForCharacterization(logicalName)) {
+    return {
+      classification: LOGICAL_NAME_CLASSIFICATION.invalidScalar,
+    };
+  }
+
+  const normalized = logicalName.normalize('NFC');
+  const bytes = Buffer.from(normalized, 'utf8');
+  if (bytes.length < 1 || bytes.length > 100) {
+    return {
+      classification: LOGICAL_NAME_CLASSIFICATION.invalidLength,
+    };
+  }
+
+  return {
+    classification: LOGICAL_NAME_CLASSIFICATION.exact,
+    logicalName: normalized,
+    hex: bytes.toString('hex'),
+  };
+}
+
+function decodeLogicalNameForCharacterization(hex) {
+  if (
+    typeof hex !== 'string' ||
+    !/^(?:[0-9a-f]{2})+$/.test(hex)
+  ) {
+    return {
+      classification: LOGICAL_NAME_CLASSIFICATION.invalidHex,
+    };
+  }
+
+  let logicalName;
+  try {
+    logicalName = STRICT_UTF8_DECODER.decode(Buffer.from(hex, 'hex'));
+  } catch {
+    return {
+      classification: LOGICAL_NAME_CLASSIFICATION.invalidUtf8,
+    };
+  }
+
+  if (logicalName !== logicalName.normalize('NFC')) {
+    return {
+      classification: LOGICAL_NAME_CLASSIFICATION.nonNfc,
+    };
+  }
+
+  const encoded = encodeLogicalNameForCharacterization(logicalName);
+  if (
+    encoded.classification !== LOGICAL_NAME_CLASSIFICATION.exact ||
+    encoded.hex !== hex
+  ) {
+    return {
+      classification: LOGICAL_NAME_CLASSIFICATION.nonCanonical,
+    };
+  }
+
+  return {
+    classification: LOGICAL_NAME_CLASSIFICATION.exact,
+    logicalName,
+    hex,
+  };
+}
+
+function classifyPhysicalEntryForCharacterization(entryName) {
+  if (entryName === '_state.ms') {
+    return {
+      classification: PHYSICAL_ENTRY_CLASSIFICATION.nodeState,
+    };
+  }
+
+  if (entryName === '_colstate.mc') {
+    return {
+      classification: PHYSICAL_ENTRY_CLASSIFICATION.collectionState,
+    };
+  }
+
+  if (
+    typeof entryName !== 'string' ||
+    entryName.length === 0
+  ) {
+    return {
+      classification: PHYSICAL_ENTRY_CLASSIFICATION.unknown,
+    };
+  }
+
+  const nodeSlotMatch = /^n_(0|[1-9][0-9]*)$/.exec(entryName);
+  if (nodeSlotMatch !== null) {
+    return {
+      classification: PHYSICAL_ENTRY_CLASSIFICATION.nodeSlot,
+      slot: nodeSlotMatch[1],
+    };
+  }
+
+  if (entryName.toLowerCase().startsWith('n_')) {
+    return {
+      classification: PHYSICAL_ENTRY_CLASSIFICATION.malformed,
+    };
+  }
+
+  const logicalKeyMatch =
+    /^k_([0-9a-f]+)\.(md|ml|mf)$/.exec(entryName);
+  if (logicalKeyMatch !== null) {
+    const decoded = decodeLogicalNameForCharacterization(
+      logicalKeyMatch[1],
+    );
+    if (
+      decoded.classification !== LOGICAL_NAME_CLASSIFICATION.exact
+    ) {
+      return {
+        classification: PHYSICAL_ENTRY_CLASSIFICATION.malformed,
+      };
+    }
+
+    const classifications = {
+      md: PHYSICAL_ENTRY_CLASSIFICATION.data,
+      ml: PHYSICAL_ENTRY_CLASSIFICATION.link,
+      mf: PHYSICAL_ENTRY_CLASSIFICATION.storedFunction,
+    };
+    return {
+      classification: classifications[logicalKeyMatch[2]],
+      logicalName: decoded.logicalName,
+      hex: decoded.hex,
+    };
+  }
+
+  if (entryName.toLowerCase().startsWith('k_')) {
+    return {
+      classification: PHYSICAL_ENTRY_CLASSIFICATION.malformed,
+    };
+  }
+
+  const collectionMatch = /^c_([0-9a-f]+)$/.exec(entryName);
+  if (collectionMatch !== null) {
+    const decoded = decodeLogicalNameForCharacterization(
+      collectionMatch[1],
+    );
+    if (
+      decoded.classification !== LOGICAL_NAME_CLASSIFICATION.exact
+    ) {
+      return {
+        classification: PHYSICAL_ENTRY_CLASSIFICATION.malformed,
+      };
+    }
+
+    return {
+      classification: PHYSICAL_ENTRY_CLASSIFICATION.collection,
+      logicalName: decoded.logicalName,
+      hex: decoded.hex,
+    };
+  }
+
+  if (
+    entryName.toLowerCase().startsWith('c_') ||
+    entryName.toLowerCase() === '_state.ms' ||
+    entryName.toLowerCase() === '_colstate.mc'
+  ) {
+    return {
+      classification: PHYSICAL_ENTRY_CLASSIFICATION.malformed,
+    };
+  }
+
+  return {
+    classification: PHYSICAL_ENTRY_CLASSIFICATION.unknown,
+  };
+}
+
+function classifyPhysicalNamespaceForCharacterization(entryNames) {
+  const logicalCategories = new Set([
+    PHYSICAL_ENTRY_CLASSIFICATION.data,
+    PHYSICAL_ENTRY_CLASSIFICATION.link,
+    PHYSICAL_ENTRY_CLASSIFICATION.storedFunction,
+    PHYSICAL_ENTRY_CLASSIFICATION.collection,
+  ]);
+  const logicalNames = new Map();
+
+  for (const entryName of entryNames) {
+    const entry =
+      classifyPhysicalEntryForCharacterization(entryName);
+    if (
+      entry.classification ===
+        PHYSICAL_ENTRY_CLASSIFICATION.malformed ||
+      entry.classification === PHYSICAL_ENTRY_CLASSIFICATION.unknown
+    ) {
+      return {
+        classification:
+          PHYSICAL_NAMESPACE_CLASSIFICATION.invalidEntry,
+        entryName,
+      };
+    }
+
+    if (!logicalCategories.has(entry.classification)) {
+      continue;
+    }
+
+    if (logicalNames.has(entry.logicalName)) {
+      return {
+        classification:
+          PHYSICAL_NAMESPACE_CLASSIFICATION.collision,
+        logicalName: entry.logicalName,
+        categories: [
+          logicalNames.get(entry.logicalName),
+          entry.classification,
+        ],
+      };
+    }
+
+    logicalNames.set(entry.logicalName, entry.classification);
+  }
+
+  return {
+    classification: PHYSICAL_NAMESPACE_CLASSIFICATION.distinct,
+  };
+}
+
+function classifyRootInputForCharacterization(rootInput, flavor) {
+  if (
+    typeof rootInput !== 'string' ||
+    rootInput.length === 0 ||
+    rootInput.includes('\0') ||
+    /^~(?:[\\/]|$)/.test(rootInput) ||
+    /^\$(?:[A-Za-z_][A-Za-z0-9_]*|\{[^}]+\})(?:[\\/]|$)/
+      .test(rootInput) ||
+    /^%[^%]+%(?:[\\/]|$)/.test(rootInput)
+  ) {
+    return ROOT_INPUT_CLASSIFICATION.rejected;
+  }
+
+  if (flavor === 'windows') {
+    if (
+      /^\\\\[.?]\\/.test(rootInput) ||
+      /^\\\\/.test(rootInput)
+    ) {
+      return ROOT_INPUT_CLASSIFICATION.rejected;
+    }
+
+    if (/^[A-Za-z]:\\/.test(rootInput)) {
+      return ROOT_INPUT_CLASSIFICATION.windowsLocal;
+    }
+
+    return ROOT_INPUT_CLASSIFICATION.rejected;
+  }
+
+  if (flavor === 'posix') {
+    if (
+      /^\/(?!\/)/.test(rootInput) &&
+      !/^[A-Za-z][A-Za-z0-9+.-]*:/.test(rootInput)
+    ) {
+      return ROOT_INPUT_CLASSIFICATION.posixLocal;
+    }
+
+    return ROOT_INPUT_CLASSIFICATION.rejected;
+  }
+
+  return ROOT_INPUT_CLASSIFICATION.rejected;
 }
 
 function classifyProposedRootMarkerForCharacterization(
@@ -430,6 +771,32 @@ async function readProposedLoclessFixtureEvidence() {
     ),
     readCharacterizationFixture(
       'proposed-v1-locless/descendant.ml',
+    ),
+  ]);
+
+  return {
+    root: parseCharacterizationState(rootBytes),
+    child: parseCharacterizationState(childBytes),
+    rootBytes,
+    childBytes,
+    linkBytes,
+  };
+}
+
+// The encoded-name fixture is synthetic lexical-contract characterization
+// evidence. It is not runtime-generated, loadable, released, qualified,
+// portable, containment-safe, or durable state. This reader performs no
+// Moxley construction, loading, path resolution, or database traversal.
+async function readProposedEncodedNameFixtureEvidence() {
+  const [rootBytes, childBytes, linkBytes] = await Promise.all([
+    readCharacterizationFixture(
+      'proposed-v1-encoded-names/_state.ms',
+    ),
+    readCharacterizationFixture(
+      'proposed-v1-encoded-names/n_0/_state.ms',
+    ),
+    readCharacterizationFixture(
+      `proposed-v1-encoded-names/${PROPOSED_ENCODED_LINK_FILENAME}`,
     ),
   ]);
 
@@ -1649,5 +2016,433 @@ test(
       }),
       PROPOSED_LOCLESS_CLASSIFICATION.exact,
     );
+  },
+);
+
+test(
+  'proposed version-1 encoded-name preimage uses canonical physical names',
+  async () => {
+    const encodedPaths = (
+      await enumerateCharacterizationFixturePaths()
+    ).filter((relativePath) => (
+      relativePath.startsWith('proposed-v1-encoded-names/')
+    ));
+    assert.deepEqual(encodedPaths, [
+      'proposed-v1-encoded-names/_state.ms',
+      `proposed-v1-encoded-names/${PROPOSED_ENCODED_LINK_FILENAME}`,
+      'proposed-v1-encoded-names/n_0/_state.ms',
+    ]);
+
+    const {
+      root,
+      child,
+      rootBytes,
+      childBytes,
+      linkBytes,
+    } = await readProposedEncodedNameFixtureEvidence();
+    const newFixtures = {
+      'proposed-v1-encoded-names/_state.ms': rootBytes,
+      'proposed-v1-encoded-names/n_0/_state.ms': childBytes,
+      [`proposed-v1-encoded-names/${PROPOSED_ENCODED_LINK_FILENAME}`]:
+        linkBytes,
+    };
+
+    for (const [relativePath, bytes] of Object.entries(newFixtures)) {
+      const expectation = CHARACTERIZATION_FIXTURES[relativePath];
+      assert.equal(bytes.length, expectation.byteLength, relativePath);
+      assert.equal(bytes.at(-1), expectation.finalByte, relativePath);
+      assert.equal(fixtureSha256(bytes), expectation.sha256, relativePath);
+      assert.equal(
+        bytes.subarray(0, 3).equals(Buffer.from([0xef, 0xbb, 0xbf])),
+        false,
+        relativePath,
+      );
+      assert.equal(bytes.includes(0x0a), false, relativePath);
+      assert.equal(bytes.includes(0x0d), false, relativePath);
+    }
+
+    assert.deepEqual(
+      rootBytes,
+      await readCharacterizationFixture(
+        'proposed-v1-locless/_state.ms',
+      ),
+    );
+    assert.deepEqual(
+      childBytes,
+      await readCharacterizationFixture(
+        'proposed-v1-locless/0/_state.ms',
+      ),
+    );
+    assert.deepEqual(
+      linkBytes,
+      await readCharacterizationFixture(
+        'proposed-v1-locless/descendant.ml',
+      ),
+    );
+    assert.equal(root._id, PROPOSED_ROOT_NODE_UUID);
+    assert.equal(child._id, PROPOSED_CHILD_NODE_UUID);
+    assert.deepEqual(root._keys, [PROPOSED_LOGICAL_ALIAS]);
+    assert.equal(child._name, PROPOSED_LOGICAL_ALIAS);
+    assert.equal(hasOwn(root, '_loc'), false);
+    assert.equal(hasOwn(child, '_loc'), false);
+    assert.equal(
+      STRICT_UTF8_DECODER.decode(linkBytes),
+      PROPOSED_CHILD_NODE_UUID,
+    );
+    assert.equal(
+      classifyPhysicalEntryForCharacterization('n_0')
+        .classification,
+      PHYSICAL_ENTRY_CLASSIFICATION.nodeSlot,
+    );
+    assert.equal(
+      classifyPhysicalEntryForCharacterization(
+        PROPOSED_ENCODED_LINK_FILENAME,
+      ).classification,
+      PHYSICAL_ENTRY_CLASSIFICATION.link,
+    );
+    assert.equal(
+      encodedPaths.some((relativePath) => (
+        relativePath.includes('/0/') ||
+        relativePath.endsWith('/descendant.ml')
+      )),
+      false,
+    );
+
+    const readerSource =
+      readProposedEncodedNameFixtureEvidence.toString();
+    assert.equal(readerSource.includes('new Moxley'), false);
+    assert.equal(readerSource.includes('_loadFromDir'), false);
+    assert.equal(readerSource.includes('path.resolve'), false);
+  },
+);
+
+test(
+  'canonical logical names round-trip through NFC UTF-8 lowercase hex',
+  () => {
+    const encodedAlias =
+      encodeLogicalNameForCharacterization(PROPOSED_LOGICAL_ALIAS);
+    assert.deepEqual(encodedAlias, {
+      classification: LOGICAL_NAME_CLASSIFICATION.exact,
+      logicalName: PROPOSED_LOGICAL_ALIAS,
+      hex: PROPOSED_LOGICAL_ALIAS_HEX,
+    });
+    assert.deepEqual(
+      decodeLogicalNameForCharacterization(
+        PROPOSED_LOGICAL_ALIAS_HEX,
+      ),
+      encodedAlias,
+    );
+
+    const differentCase =
+      encodeLogicalNameForCharacterization('Descendant');
+    assert.equal(
+      differentCase.classification,
+      LOGICAL_NAME_CLASSIFICATION.exact,
+    );
+    assert.notEqual(differentCase.hex, PROPOSED_LOGICAL_ALIAS_HEX);
+    assert.equal(
+      decodeLogicalNameForCharacterization(differentCase.hex)
+        .logicalName,
+      'Descendant',
+    );
+
+    for (const logicalName of ['é', '東京', '😀']) {
+      const encoded =
+        encodeLogicalNameForCharacterization(logicalName);
+      assert.equal(
+        encoded.classification,
+        LOGICAL_NAME_CLASSIFICATION.exact,
+        logicalName,
+      );
+      assert.deepEqual(
+        decodeLogicalNameForCharacterization(encoded.hex),
+        encoded,
+        logicalName,
+      );
+    }
+
+    const normalized =
+      encodeLogicalNameForCharacterization('e\u0301');
+    assert.equal(
+      normalized.classification,
+      LOGICAL_NAME_CLASSIFICATION.exact,
+    );
+    assert.equal(normalized.logicalName, 'é');
+    assert.equal(normalized.hex, 'c3a9');
+
+    const invalidLogicalNames = [
+      ['', LOGICAL_NAME_CLASSIFICATION.invalidLength],
+      ['a'.repeat(101), LOGICAL_NAME_CLASSIFICATION.invalidLength],
+      [null, LOGICAL_NAME_CLASSIFICATION.invalidType],
+      [17, LOGICAL_NAME_CLASSIFICATION.invalidType],
+      [new String('descendant'), LOGICAL_NAME_CLASSIFICATION.invalidType],
+      ['\ud800', LOGICAL_NAME_CLASSIFICATION.invalidScalar],
+      ['\udc00', LOGICAL_NAME_CLASSIFICATION.invalidScalar],
+      ['a\ud800b', LOGICAL_NAME_CLASSIFICATION.invalidScalar],
+    ];
+    for (const [logicalName, expected] of invalidLogicalNames) {
+      assert.equal(
+        encodeLogicalNameForCharacterization(logicalName)
+          .classification,
+        expected,
+      );
+    }
+  },
+);
+
+test(
+  'uppercase odd invalid UTF-8 and non-NFC encodings fail characterization',
+  () => {
+    assert.equal(
+      decodeLogicalNameForCharacterization(
+        PROPOSED_LOGICAL_ALIAS_HEX.toUpperCase(),
+      ).classification,
+      LOGICAL_NAME_CLASSIFICATION.invalidHex,
+    );
+    assert.equal(
+      decodeLogicalNameForCharacterization('646')
+        .classification,
+      LOGICAL_NAME_CLASSIFICATION.invalidHex,
+    );
+    assert.equal(
+      decodeLogicalNameForCharacterization('zz')
+        .classification,
+      LOGICAL_NAME_CLASSIFICATION.invalidHex,
+    );
+    assert.equal(
+      decodeLogicalNameForCharacterization('80')
+        .classification,
+      LOGICAL_NAME_CLASSIFICATION.invalidUtf8,
+    );
+    assert.equal(
+      decodeLogicalNameForCharacterization('c328')
+        .classification,
+      LOGICAL_NAME_CLASSIFICATION.invalidUtf8,
+    );
+
+    const nonNfcUtf8 = Buffer.from('e\u0301', 'utf8')
+      .toString('hex');
+    assert.equal(nonNfcUtf8, '65cc81');
+    assert.equal(
+      decodeLogicalNameForCharacterization(nonNfcUtf8)
+        .classification,
+      LOGICAL_NAME_CLASSIFICATION.nonNfc,
+    );
+  },
+);
+
+test(
+  'legacy unknown and type-conflicting physical names fail characterization',
+  () => {
+    assert.equal(
+      classifyPhysicalEntryForCharacterization('_state.ms')
+        .classification,
+      PHYSICAL_ENTRY_CLASSIFICATION.nodeState,
+    );
+    assert.equal(
+      classifyPhysicalEntryForCharacterization('_colstate.mc')
+        .classification,
+      PHYSICAL_ENTRY_CLASSIFICATION.collectionState,
+    );
+    assert.equal(
+      classifyPhysicalEntryForCharacterization(
+        `k_${PROPOSED_LOGICAL_ALIAS_HEX}.mf`,
+      ).classification,
+      PHYSICAL_ENTRY_CLASSIFICATION.storedFunction,
+    );
+    assert.equal(
+      classifyPhysicalEntryForCharacterization(
+        `c_${PROPOSED_LOGICAL_ALIAS_HEX}`,
+      ).classification,
+      PHYSICAL_ENTRY_CLASSIFICATION.collection,
+    );
+
+    const unknownEntries = [
+      '0',
+      'descendant.ml',
+      `x_${PROPOSED_LOGICAL_ALIAS_HEX}.ml`,
+    ];
+    for (const entryName of unknownEntries) {
+      assert.equal(
+        classifyPhysicalEntryForCharacterization(entryName)
+          .classification,
+        PHYSICAL_ENTRY_CLASSIFICATION.unknown,
+        entryName,
+      );
+      assert.equal(
+        classifyPhysicalNamespaceForCharacterization([entryName])
+          .classification,
+        PHYSICAL_NAMESPACE_CLASSIFICATION.invalidEntry,
+        entryName,
+      );
+    }
+
+    const malformedEntries = [
+      `k_${PROPOSED_LOGICAL_ALIAS_HEX}.mx`,
+      `K_${PROPOSED_LOGICAL_ALIAS_HEX}.ml`,
+      `k_${PROPOSED_LOGICAL_ALIAS_HEX.toUpperCase()}.ml`,
+      `k_${PROPOSED_LOGICAL_ALIAS_HEX}.ML`,
+      '_STATE.ms',
+      '_COLSTATE.mc',
+      `C_${PROPOSED_LOGICAL_ALIAS_HEX}`,
+    ];
+    for (const entryName of malformedEntries) {
+      assert.equal(
+        classifyPhysicalEntryForCharacterization(entryName)
+          .classification,
+        PHYSICAL_ENTRY_CLASSIFICATION.malformed,
+        entryName,
+      );
+    }
+
+    assert.equal(
+      classifyPhysicalNamespaceForCharacterization([
+        `k_${PROPOSED_LOGICAL_ALIAS_HEX}.md`,
+        PROPOSED_ENCODED_LINK_FILENAME,
+      ]).classification,
+      PHYSICAL_NAMESPACE_CLASSIFICATION.collision,
+    );
+  },
+);
+
+test(
+  'duplicate decoded logical names fail across persisted entry types',
+  () => {
+    const dataName = `k_${PROPOSED_LOGICAL_ALIAS_HEX}.md`;
+    const linkName = PROPOSED_ENCODED_LINK_FILENAME;
+    const functionName = `k_${PROPOSED_LOGICAL_ALIAS_HEX}.mf`;
+    const collectionName = `c_${PROPOSED_LOGICAL_ALIAS_HEX}`;
+    const collisionPairs = [
+      [dataName, linkName],
+      [linkName, functionName],
+      [dataName, collectionName],
+      [functionName, collectionName],
+    ];
+
+    for (const entries of collisionPairs) {
+      const result =
+        classifyPhysicalNamespaceForCharacterization(entries);
+      assert.equal(
+        result.classification,
+        PHYSICAL_NAMESPACE_CLASSIFICATION.collision,
+        entries.join(' and '),
+      );
+      assert.equal(result.logicalName, PROPOSED_LOGICAL_ALIAS);
+    }
+
+    const uppercaseLogicalHex =
+      encodeLogicalNameForCharacterization('Descendant').hex;
+    assert.equal(
+      classifyPhysicalNamespaceForCharacterization([
+        dataName,
+        `k_${uppercaseLogicalHex}.ml`,
+      ]).classification,
+      PHYSICAL_NAMESPACE_CLASSIFICATION.distinct,
+    );
+  },
+);
+
+test(
+  'node slot names require canonical decimal placement grammar',
+  () => {
+    for (const slotName of ['n_0', 'n_1', 'n_10']) {
+      assert.equal(
+        classifyPhysicalEntryForCharacterization(slotName)
+          .classification,
+        PHYSICAL_ENTRY_CLASSIFICATION.nodeSlot,
+        slotName,
+      );
+    }
+
+    for (
+      const slotName of [
+        '0',
+        'n_00',
+        'n_01',
+        'N_0',
+        'n_-1',
+        'n_+1',
+        'n_1.0',
+        'n_',
+      ]
+    ) {
+      assert.notEqual(
+        classifyPhysicalEntryForCharacterization(slotName)
+          .classification,
+        PHYSICAL_ENTRY_CLASSIFICATION.nodeSlot,
+        slotName,
+      );
+    }
+  },
+);
+
+test(
+  'root input characterization rejects nonlocal and nonabsolute lexical classes',
+  () => {
+    assert.equal(
+      classifyRootInputForCharacterization(
+        String.raw`C:\moxley\database`,
+        'windows',
+      ),
+      ROOT_INPUT_CLASSIFICATION.windowsLocal,
+    );
+    assert.equal(
+      classifyRootInputForCharacterization(
+        '/var/lib/moxley/database',
+        'posix',
+      ),
+      ROOT_INPUT_CLASSIFICATION.posixLocal,
+    );
+
+    const rejectedInputs = [
+      [null, 'windows'],
+      [17, 'posix'],
+      [{}, 'posix'],
+      ['', 'windows'],
+      [String.raw`C:\moxley\0database`.replace('\\0', '\0'), 'windows'],
+      ['relative/database', 'posix'],
+      [String.raw`relative\database`, 'windows'],
+      [String.raw`C:relative\database`, 'windows'],
+      [String.raw`\root-relative\database`, 'windows'],
+      [String.raw`\\server\share\database`, 'windows'],
+      [String.raw`\\.\C:\database`, 'windows'],
+      [String.raw`\\?\C:\database`, 'windows'],
+      ['file:///var/lib/moxley', 'posix'],
+      ['https://example.invalid/database', 'posix'],
+      ['~/database', 'posix'],
+      ['$HOME/database', 'posix'],
+      ['${HOME}/database', 'posix'],
+      [String.raw`%USERPROFILE%\database`, 'windows'],
+      ['//network-root/database', 'posix'],
+      [String.raw`C:\moxley\database`, 'posix'],
+      ['/var/lib/moxley/database', 'windows'],
+    ];
+    for (const [rootInput, flavor] of rejectedInputs) {
+      assert.equal(
+        classifyRootInputForCharacterization(rootInput, flavor),
+        ROOT_INPUT_CLASSIFICATION.rejected,
+        `${String(rootInput)} as ${flavor}`,
+      );
+    }
+
+    const classifierSource =
+      classifyRootInputForCharacterization.toString();
+    for (
+      const forbiddenOperation of [
+        'path.',
+        'resolve(',
+        'realpath',
+        'readFile',
+        'readdir',
+        'stat(',
+        'exists',
+      ]
+    ) {
+      assert.equal(
+        classifierSource.includes(forbiddenOperation),
+        false,
+        forbiddenOperation,
+      );
+    }
   },
 );
