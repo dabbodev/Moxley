@@ -28,6 +28,12 @@ const STATE_PREIMAGE_FIXTURE_ROOT = path.join(
   'state-preimages',
 );
 const STRICT_UTF8_DECODER = new TextDecoder('utf-8', { fatal: true });
+const CANONICAL_UUID_V4_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const PROPOSED_ROOT_NODE_UUID =
+  '11111111-1111-4111-8111-111111111111';
+const PROPOSED_CHILD_NODE_UUID =
+  '22222222-2222-4222-8222-222222222222';
 
 // The fixed _loc values are characterization sentinels, not user paths.
 // These fixture trees are synthetic exemplars, not archived user databases,
@@ -93,6 +99,24 @@ const CHARACTERIZATION_FIXTURES = Object.freeze({
     sha256:
       '5513e3eabba6d75402c1c34c7365c6fac01024589d0a6996329255cd18fec5cc',
   },
+  'proposed-v1-identity/_state.ms': {
+    byteLength: 244,
+    finalByte: 0x5d,
+    sha256:
+      '3f703b7786f957a573d0303d07f018c9fc1d9417031c633f0ccc5d858c29027e',
+  },
+  'proposed-v1-identity/0/_state.ms': {
+    byteLength: 229,
+    finalByte: 0x5d,
+    sha256:
+      '264b4298693f21d40e2f3b18c0b46f28181dbebfa5db16e7a83603972cd48f49',
+  },
+  'proposed-v1-identity/descendant.ml': {
+    byteLength: 36,
+    finalByte: 0x32,
+    sha256:
+      'b454f82c5857ebabf342b7258e5cf7def78b7cd975814119462973de9a38df10',
+  },
 });
 
 const PROPOSED_MARKER_CLASSIFICATION = Object.freeze({
@@ -100,6 +124,18 @@ const PROPOSED_MARKER_CLASSIFICATION = Object.freeze({
   unversioned: 'unversioned-root',
   invalid: 'invalid-or-unsupported-marker',
   nonRoot: 'marker-in-non-root-context',
+});
+
+const PROPOSED_IDENTITY_CLASSIFICATION = Object.freeze({
+  exact: 'exact-proposed-version-1-identity',
+  invalidRootId: 'invalid-root-node-id',
+  invalidRootParent: 'invalid-root-parent-id',
+  invalidNodeId: 'invalid-node-id',
+  duplicateNodeId: 'duplicate-node-id',
+  invalidParentId: 'invalid-parent-id',
+  parentMismatch: 'parent-id-mismatch',
+  invalidLinkBytes: 'invalid-named-link-bytes',
+  danglingLink: 'dangling-named-link',
 });
 
 function hasOwn(value, key) {
@@ -144,6 +180,88 @@ function classifyProposedRootMarkerForCharacterization(
   return PROPOSED_MARKER_CLASSIFICATION.invalid;
 }
 
+function classifyProposedIdentityForCharacterization({
+  root,
+  children = [],
+  links = [],
+}) {
+  if (
+    root === null ||
+    typeof root !== 'object' ||
+    Array.isArray(root) ||
+    !CANONICAL_UUID_V4_PATTERN.test(root._id)
+  ) {
+    return PROPOSED_IDENTITY_CLASSIFICATION.invalidRootId;
+  }
+
+  if (!hasOwn(root, '_parentId') || root._parentId !== null) {
+    return PROPOSED_IDENTITY_CLASSIFICATION.invalidRootParent;
+  }
+
+  const nodeIndex = new Map([[root._id, root]]);
+
+  for (const childEvidence of children) {
+    const child = childEvidence.state;
+    if (
+      child === null ||
+      typeof child !== 'object' ||
+      Array.isArray(child) ||
+      !CANONICAL_UUID_V4_PATTERN.test(child._id)
+    ) {
+      return PROPOSED_IDENTITY_CLASSIFICATION.invalidNodeId;
+    }
+
+    if (nodeIndex.has(child._id)) {
+      return PROPOSED_IDENTITY_CLASSIFICATION.duplicateNodeId;
+    }
+
+    nodeIndex.set(child._id, child);
+  }
+
+  for (const childEvidence of children) {
+    const child = childEvidence.state;
+    if (
+      !hasOwn(child, '_parentId') ||
+      !CANONICAL_UUID_V4_PATTERN.test(child._parentId)
+    ) {
+      return PROPOSED_IDENTITY_CLASSIFICATION.invalidParentId;
+    }
+
+    if (
+      !nodeIndex.has(childEvidence.physicalParentId) ||
+      child._parentId !== childEvidence.physicalParentId
+    ) {
+      return PROPOSED_IDENTITY_CLASSIFICATION.parentMismatch;
+    }
+  }
+
+  for (const link of links) {
+    if (!(link.bytes instanceof Uint8Array)) {
+      return PROPOSED_IDENTITY_CLASSIFICATION.invalidLinkBytes;
+    }
+
+    let targetId;
+    try {
+      targetId = STRICT_UTF8_DECODER.decode(link.bytes);
+    } catch {
+      return PROPOSED_IDENTITY_CLASSIFICATION.invalidLinkBytes;
+    }
+
+    if (
+      !CANONICAL_UUID_V4_PATTERN.test(targetId) ||
+      !Buffer.from(targetId, 'utf8').equals(Buffer.from(link.bytes))
+    ) {
+      return PROPOSED_IDENTITY_CLASSIFICATION.invalidLinkBytes;
+    }
+
+    if (!nodeIndex.has(targetId)) {
+      return PROPOSED_IDENTITY_CLASSIFICATION.danglingLink;
+    }
+  }
+
+  return PROPOSED_IDENTITY_CLASSIFICATION.exact;
+}
+
 async function enumerateCharacterizationFixturePaths(
   directory = STATE_PREIMAGE_FIXTURE_ROOT,
 ) {
@@ -178,6 +296,55 @@ async function readCharacterizationFixture(relativePath) {
 
 function parseCharacterizationState(bytes) {
   return parse(STRICT_UTF8_DECODER.decode(bytes));
+}
+
+// The proposed identity fixture is synthetic contract-characterization
+// evidence. It is not runtime-generated, loadable, released, qualified, or
+// durable state. This reader and the classifier above operate only on bytes
+// and parsed values; they never construct Moxley or call _loadFromDir().
+async function readProposedIdentityFixtureEvidence() {
+  const [rootBytes, childBytes, linkBytes] = await Promise.all([
+    readCharacterizationFixture('proposed-v1-identity/_state.ms'),
+    readCharacterizationFixture(
+      'proposed-v1-identity/0/_state.ms',
+    ),
+    readCharacterizationFixture(
+      'proposed-v1-identity/descendant.ml',
+    ),
+  ]);
+
+  return {
+    root: parseCharacterizationState(rootBytes),
+    child: parseCharacterizationState(childBytes),
+    linkBytes,
+  };
+}
+
+function proposedIdentityEvidence(
+  root,
+  child,
+  linkBytes,
+  {
+    physicalSlot = '0',
+    aliasKey = 'descendant',
+  } = {},
+) {
+  return {
+    root,
+    children: [
+      {
+        state: child,
+        physicalParentId: root._id,
+        physicalSlot,
+      },
+    ],
+    links: [
+      {
+        aliasKey,
+        bytes: linkBytes,
+      },
+    ],
+  };
 }
 
 function fixtureSha256(bytes) {
@@ -726,6 +893,380 @@ test(
         { rootContext: false },
       ),
       PROPOSED_MARKER_CLASSIFICATION.exact,
+    );
+  },
+);
+
+test(
+  'proposed version-1 identity preimage uses canonical node UUIDs',
+  async () => {
+    const identityPaths = (
+      await enumerateCharacterizationFixturePaths()
+    ).filter((relativePath) => (
+      relativePath.startsWith('proposed-v1-identity/')
+    ));
+    assert.deepEqual(identityPaths, [
+      'proposed-v1-identity/0/_state.ms',
+      'proposed-v1-identity/_state.ms',
+      'proposed-v1-identity/descendant.ml',
+    ]);
+
+    const {
+      root,
+      child,
+    } = await readProposedIdentityFixtureEvidence();
+
+    assert.deepEqual(root, {
+      _loc: CHARACTERIZATION_SENTINEL_ROOT,
+      _id: PROPOSED_ROOT_NODE_UUID,
+      _parentId: null,
+      _name: 'root',
+      _keys: ['descendant'],
+      _bindings: [],
+      _format: 'moxley-db',
+      _formatVersion: 1,
+    });
+    assert.deepEqual(child, {
+      _loc: `${CHARACTERIZATION_SENTINEL_ROOT}0/`,
+      _id: PROPOSED_CHILD_NODE_UUID,
+      _parentId: PROPOSED_ROOT_NODE_UUID,
+      _name: 'descendant',
+      _keys: [],
+      _bindings: [],
+    });
+    assert.equal(
+      CANONICAL_UUID_V4_PATTERN.test(root._id),
+      true,
+    );
+    assert.equal(
+      CANONICAL_UUID_V4_PATTERN.test(child._id),
+      true,
+    );
+    assert.notEqual(root._id, child._id);
+    assert.equal(
+      classifyProposedRootMarkerForCharacterization(root),
+      PROPOSED_MARKER_CLASSIFICATION.exact,
+    );
+    assert.equal(hasOwn(child, '_format'), false);
+    assert.equal(hasOwn(child, '_formatVersion'), false);
+  },
+);
+
+test(
+  'proposed version-1 identity preserves physical parent ownership separately from directory slots',
+  async () => {
+    const {
+      root,
+      child,
+      linkBytes,
+    } = await readProposedIdentityFixtureEvidence();
+    const originalEvidence = proposedIdentityEvidence(
+      root,
+      child,
+      linkBytes,
+    );
+    const relabeledSlotEvidence = proposedIdentityEvidence(
+      root,
+      child,
+      linkBytes,
+      { physicalSlot: '37' },
+    );
+    const renamedEvidence = proposedIdentityEvidence(
+      { ...root, _name: 'renamed-root' },
+      { ...child, _name: 'renamed-child' },
+      linkBytes,
+      {
+        physicalSlot: 'named-slot',
+        aliasKey: 'independent-alias',
+      },
+    );
+
+    assert.equal(root._parentId, null);
+    assert.equal(child._parentId, root._id);
+    assert.equal(root._id.includes('0'), false);
+    assert.equal(child._id.includes('0'), false);
+    assert.notEqual(root._id, '0');
+    assert.notEqual(child._id, '0/0');
+    assert.equal(
+      classifyProposedIdentityForCharacterization(originalEvidence),
+      PROPOSED_IDENTITY_CLASSIFICATION.exact,
+    );
+    assert.equal(
+      classifyProposedIdentityForCharacterization(
+        relabeledSlotEvidence,
+      ),
+      PROPOSED_IDENTITY_CLASSIFICATION.exact,
+    );
+    assert.equal(
+      classifyProposedIdentityForCharacterization(renamedEvidence),
+      PROPOSED_IDENTITY_CLASSIFICATION.exact,
+    );
+    assert.equal(
+      relabeledSlotEvidence.children[0].state._id,
+      child._id,
+    );
+    assert.equal(
+      renamedEvidence.children[0].state._id,
+      child._id,
+    );
+  },
+);
+
+test(
+  'proposed version-1 named link contains only the target node UUID',
+  async () => {
+    const {
+      root,
+      child,
+      linkBytes,
+    } = await readProposedIdentityFixtureEvidence();
+    const duplicateAliases = {
+      root,
+      children: [
+        {
+          state: child,
+          physicalParentId: root._id,
+          physicalSlot: '0',
+        },
+      ],
+      links: [
+        {
+          aliasKey: 'first-alias',
+          bytes: linkBytes,
+        },
+        {
+          aliasKey: 'second-alias',
+          bytes: Buffer.from(PROPOSED_CHILD_NODE_UUID, 'utf8'),
+        },
+      ],
+    };
+    const rootAlias = {
+      ...duplicateAliases,
+      links: [
+        {
+          aliasKey: 'root-alias',
+          bytes: Buffer.from(PROPOSED_ROOT_NODE_UUID, 'utf8'),
+        },
+      ],
+    };
+
+    assert.deepEqual(
+      linkBytes,
+      Buffer.from(PROPOSED_CHILD_NODE_UUID, 'utf8'),
+    );
+    assert.equal(linkBytes.length, 36);
+    assert.equal(
+      classifyProposedIdentityForCharacterization(
+        duplicateAliases,
+      ),
+      PROPOSED_IDENTITY_CLASSIFICATION.exact,
+    );
+    assert.equal(
+      classifyProposedIdentityForCharacterization(rootAlias),
+      PROPOSED_IDENTITY_CLASSIFICATION.exact,
+    );
+    assert.equal(root._parentId, null);
+    assert.equal(child._parentId, root._id);
+  },
+);
+
+test(
+  'positional malformed and duplicate node identities fail characterization',
+  async () => {
+    const {
+      root,
+      child,
+      linkBytes,
+    } = await readProposedIdentityFixtureEvidence();
+    const invalidChildIds = [
+      '0/0',
+      'AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA',
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa',
+      'aaaaaaaa-aaaa-5aaa-8aaa-aaaaaaaaaaaa',
+      'aaaaaaaa-aaaa-4aaa-7aaa-aaaaaaaaaaaa',
+      'not-a-uuid',
+    ];
+
+    assert.equal(
+      classifyProposedIdentityForCharacterization(
+        proposedIdentityEvidence(
+          { ...root, _id: '0' },
+          child,
+          linkBytes,
+        ),
+      ),
+      PROPOSED_IDENTITY_CLASSIFICATION.invalidRootId,
+    );
+
+    for (const invalidId of invalidChildIds) {
+      assert.equal(
+        classifyProposedIdentityForCharacterization(
+          proposedIdentityEvidence(
+            root,
+            { ...child, _id: invalidId },
+            linkBytes,
+          ),
+        ),
+        PROPOSED_IDENTITY_CLASSIFICATION.invalidNodeId,
+        invalidId,
+      );
+    }
+
+    const duplicateIdentity = proposedIdentityEvidence(
+      root,
+      {
+        ...child,
+        _id: root._id,
+      },
+      linkBytes,
+    );
+    assert.equal(
+      classifyProposedIdentityForCharacterization(
+        duplicateIdentity,
+      ),
+      PROPOSED_IDENTITY_CLASSIFICATION.duplicateNodeId,
+    );
+  },
+);
+
+test(
+  'dangling and malformed named-link targets fail characterization',
+  async () => {
+    const {
+      root,
+      child,
+    } = await readProposedIdentityFixtureEvidence();
+    const unknownUuid =
+      '33333333-3333-4333-8333-333333333333';
+    const danglingEvidence = proposedIdentityEvidence(
+      root,
+      child,
+      Buffer.from(unknownUuid, 'utf8'),
+    );
+    assert.equal(
+      classifyProposedIdentityForCharacterization(danglingEvidence),
+      PROPOSED_IDENTITY_CLASSIFICATION.danglingLink,
+    );
+
+    const malformedLinks = [
+      `"${PROPOSED_CHILD_NODE_UUID}"`,
+      JSON.stringify({ id: PROPOSED_CHILD_NODE_UUID }),
+      ` ${PROPOSED_CHILD_NODE_UUID} `,
+      `${PROPOSED_CHILD_NODE_UUID}\r`,
+      `${PROPOSED_CHILD_NODE_UUID}\n`,
+      `${PROPOSED_CHILD_NODE_UUID}\r\n`,
+      'not-a-uuid',
+    ];
+
+    for (const malformedLink of malformedLinks) {
+      assert.equal(
+        classifyProposedIdentityForCharacterization(
+          proposedIdentityEvidence(
+            root,
+            child,
+            Buffer.from(malformedLink, 'utf8'),
+          ),
+        ),
+        PROPOSED_IDENTITY_CLASSIFICATION.invalidLinkBytes,
+        JSON.stringify(malformedLink),
+      );
+    }
+
+    assert.equal(
+      classifyProposedIdentityForCharacterization(
+        proposedIdentityEvidence(
+          root,
+          child,
+          Buffer.concat([
+            Buffer.from([0xef, 0xbb, 0xbf]),
+            Buffer.from(PROPOSED_CHILD_NODE_UUID, 'utf8'),
+          ]),
+        ),
+      ),
+      PROPOSED_IDENTITY_CLASSIFICATION.invalidLinkBytes,
+    );
+  },
+);
+
+test(
+  'missing null and mismatched parent identities fail characterization',
+  async () => {
+    const {
+      root,
+      child,
+      linkBytes,
+    } = await readProposedIdentityFixtureEvidence();
+    const {
+      _parentId: omittedRootParentId,
+      ...rootWithoutParentId
+    } = root;
+    const {
+      _parentId: omittedChildParentId,
+      ...childWithoutParentId
+    } = child;
+    const differentParentId =
+      '33333333-3333-4333-8333-333333333333';
+
+    assert.equal(omittedRootParentId, null);
+    assert.equal(omittedChildParentId, root._id);
+    assert.equal(
+      classifyProposedIdentityForCharacterization(
+        proposedIdentityEvidence(
+          rootWithoutParentId,
+          child,
+          linkBytes,
+        ),
+      ),
+      PROPOSED_IDENTITY_CLASSIFICATION.invalidRootParent,
+    );
+    assert.equal(
+      classifyProposedIdentityForCharacterization(
+        proposedIdentityEvidence(
+          {
+            ...root,
+            _parentId: differentParentId,
+          },
+          child,
+          linkBytes,
+        ),
+      ),
+      PROPOSED_IDENTITY_CLASSIFICATION.invalidRootParent,
+    );
+    assert.equal(
+      classifyProposedIdentityForCharacterization(
+        proposedIdentityEvidence(
+          root,
+          {
+            ...child,
+            _parentId: null,
+          },
+          linkBytes,
+        ),
+      ),
+      PROPOSED_IDENTITY_CLASSIFICATION.invalidParentId,
+    );
+    assert.equal(
+      classifyProposedIdentityForCharacterization(
+        proposedIdentityEvidence(
+          root,
+          childWithoutParentId,
+          linkBytes,
+        ),
+      ),
+      PROPOSED_IDENTITY_CLASSIFICATION.invalidParentId,
+    );
+    assert.equal(
+      classifyProposedIdentityForCharacterization(
+        proposedIdentityEvidence(
+          root,
+          {
+            ...child,
+            _parentId: differentParentId,
+          },
+          linkBytes,
+        ),
+      ),
+      PROPOSED_IDENTITY_CLASSIFICATION.parentMismatch,
     );
   },
 );

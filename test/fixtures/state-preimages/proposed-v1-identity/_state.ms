@@ -1,0 +1,1 @@
+[{"_loc":"1","_id":"2","_parentId":null,"_name":"3","_keys":"4","_bindings":"5","_format":"6","_formatVersion":1},"/__moxley_characterization_sentinel__/database/","11111111-1111-4111-8111-111111111111","root",["7"],[],"moxley-db","descendant"]
