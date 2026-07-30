@@ -23,6 +23,7 @@ const PROCESS_TIMEOUT_MS = 30_000;
 const WORKER_TIMEOUT_MS = 10_000;
 const MAX_PROCESS_OUTPUT_BYTES = 2 * 1024 * 1024;
 const MAX_WORKER_REQUEST_BYTES = 128 * 1024;
+const MAX_WORKER_ERROR_FIELD_LENGTH = 64;
 const WORKER_ARGUMENT = '--moxley-native-worker';
 const IS_WORKER_MODE = process.argv[2] === WORKER_ARGUMENT;
 const REPARSE_ATTRIBUTE = 0x00000400;
@@ -186,7 +187,16 @@ const receipt = {
   symbolicLinks: [],
   absentObject: 'unconfirmed',
   injectedQueryFailure: 'unconfirmed',
-  malformedLoads: 'unconfirmed',
+  loadErrors: {
+    missing: {
+      name: 'unconfirmed',
+      code: 'unconfirmed',
+    },
+    malformed: {
+      name: 'unconfirmed',
+      code: 'unconfirmed',
+    },
+  },
   cleanup: 'unconfirmed',
   overallQualification: 'no-go',
 };
@@ -282,22 +292,32 @@ function workerInputContract(addon) {
   });
 }
 
+function boundedWorkerErrorField(error, field) {
+  const value = error[field];
+  assert.equal(typeof value, 'string');
+  assert.equal(value.length > 0, true);
+  assert.equal(value.length <= MAX_WORKER_ERROR_FIELD_LENGTH, true);
+  return value;
+}
+
 async function runNativeWorker() {
   const request = parseCanonicalWorkerRequest();
   let response;
 
   if (request.operation === 'expect-load-error') {
-    let loadFailed = false;
+    let loadError = null;
     try {
       require(request.addonPath);
-    } catch {
-      loadFailed = true;
+    } catch (error) {
+      loadError = error;
     }
-    assert.equal(loadFailed, true);
+    assert.equal(loadError !== null && typeof loadError === 'object', true);
     response = {
       requestId: request.requestId,
       operation: request.operation,
       status: 'load-error',
+      errorName: boundedWorkerErrorField(loadError, 'name'),
+      errorCode: boundedWorkerErrorField(loadError, 'code'),
     };
   } else {
     const addon = loadWorkerAddon(request.addonPath);
@@ -420,6 +440,14 @@ function assertWorkerResponseShape(response, request) {
     ? ['requestId', 'operation', 'result']
     : request.operation === 'input-contract'
       ? ['requestId', 'operation', 'results']
+      : request.operation === 'expect-load-error'
+        ? [
+            'requestId',
+            'operation',
+            'status',
+            'errorName',
+            'errorCode',
+          ]
       : ['requestId', 'operation', 'status'];
   assertExactKeys(response, expectedKeys);
   assert.equal(response.requestId, request.requestId);
@@ -434,6 +462,10 @@ function assertWorkerResponseShape(response, request) {
       response.status,
       request.operation === 'load' ? 'loaded' : 'load-error',
     );
+    if (request.operation === 'expect-load-error') {
+      boundedWorkerErrorField(response, 'errorName');
+      boundedWorkerErrorField(response, 'errorCode');
+    }
   }
 }
 
@@ -834,6 +866,12 @@ function assertResultWire(result) {
   }
 }
 
+function assertNoClassificationFields(response) {
+  for (const field of ['result', ...EXPECTED_RESULT_KEYS]) {
+    assert.equal(field in response, false);
+  }
+}
+
 async function invokeProbe(target, selectedAddonPath = normalBuild.addonPath) {
   const response = await requestWorker(
     'classify',
@@ -1082,7 +1120,7 @@ describe(
     );
 
     it(
-      'native probe reports absent-object and native-query failures without acceptance',
+      'native probe fails closed for absent objects and injected attribute-query failure',
       async () => {
         const absent = path.join(filesystemRoot, 'absent-object');
         await requireErrorCode(
@@ -1135,21 +1173,48 @@ describe(
           'expect-load-error',
           missing,
         );
-        assert.equal(missingResponse.status, 'load-error');
+        const missingObservation = {
+          status: missingResponse.status,
+          errorName: missingResponse.errorName,
+          errorCode: missingResponse.errorCode,
+        };
+        assert.deepEqual(missingObservation, {
+          status: 'load-error',
+          errorName: 'Error',
+          errorCode: 'MODULE_NOT_FOUND',
+        });
+        assertNoClassificationFields(missingResponse);
 
         await writeFile(malformed, 'not-a-native-addon', 'utf8');
         const malformedResponse = await requestWorker(
           'expect-load-error',
           malformed,
         );
-        assert.equal(malformedResponse.status, 'load-error');
+        const malformedObservation = {
+          status: malformedResponse.status,
+          errorName: malformedResponse.errorName,
+          errorCode: malformedResponse.errorCode,
+        };
+        assert.deepEqual(malformedObservation, {
+          status: 'load-error',
+          errorName: 'Error',
+          errorCode: 'ERR_DLOPEN_FAILED',
+        });
+        assertNoClassificationFields(malformedResponse);
         await unlink(malformed);
         await requireErrorCode(
           'malformed addon absence',
           () => lstat(malformed),
           'ENOENT',
         );
-        receipt.malformedLoads = 'confirmed';
+        receipt.loadErrors.missing = {
+          name: missingResponse.errorName,
+          code: missingResponse.errorCode,
+        };
+        receipt.loadErrors.malformed = {
+          name: malformedResponse.errorName,
+          code: malformedResponse.errorCode,
+        };
       },
     );
 
@@ -1173,7 +1238,16 @@ describe(
         assert.equal(receipt.hardLink, 'confirmed');
         assert.equal(receipt.absentObject, 'confirmed');
         assert.equal(receipt.injectedQueryFailure, 'confirmed');
-        assert.equal(receipt.malformedLoads, 'confirmed');
+        assert.deepEqual(receipt.loadErrors, {
+          missing: {
+            name: 'Error',
+            code: 'MODULE_NOT_FOUND',
+          },
+          malformed: {
+            name: 'Error',
+            code: 'ERR_DLOPEN_FAILED',
+          },
+        });
         assert.equal(receipt.overallQualification, 'no-go');
 
         await removeOwnedRoot();
