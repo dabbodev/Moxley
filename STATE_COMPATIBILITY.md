@@ -1,11 +1,12 @@
 # Moxley State Compatibility Policy
 
 Status: Marker separability, future node identity, derived runtime-location
-authority, root-input lexical rules, persisted-name grammar, and filesystem
-canonicalization and containment policy selected; version-1 qualification
-remains a no-go pending platform-capability evidence and other decisions;
-runtime support remains unimplemented.
-Date: 2026-07-29
+authority, root-input lexical rules, persisted-name grammar, filesystem
+canonicalization and containment policy, and the future Windows reparse
+classification mechanism selected; test-only platform characterization is
+recorded, but version-1 qualification remains a no-go pending native
+build/load characterization, runtime implementation, and other decisions.
+Date: 2026-07-30
 Historical behavior baseline: `518ab5ab58500a84246770e8ef0180856e127abd`
 Discriminator decision input baseline: `635a7c09bcca63c3abbb52d5c2fbbce4b87a9817`
 Persisted-evidence inventory baseline: `3368824d8ab58d6ce8a5964b2acb8c846823430e`
@@ -15,6 +16,8 @@ Root-input and persisted-name decision input baseline:
 `44000d8625b5ba724bb090bd61ef287e3ac699f6`
 Filesystem containment decision input baseline:
 `f65acb4a413b462bd2ff8be1f5d668a9b151768a`
+Windows reparse decision input baseline:
+`9a33fca1ed185516b3c6433369a8279bb15cb9a9`
 Decision authority: David Giles, sole owner of Moxley
 
 These repository baselines are evidence and decision inputs. None is a
@@ -1178,14 +1181,26 @@ The following are **source facts** about current unversioned runtime behavior:
   complete-tree validation, so current reconstruction is not a read-only
   preflight.
 
-Existing automated tests create uniquely named OS-temporary directories and
-clean up their own paths. They characterize current construction, reopen,
-failure propagation, and persisted preimages. They do not prove non-following
-metadata, native canonicalization, symlink or junction rejection, generic
-Windows reparse detection, device continuity, hard-link count, filesystem
-object identity, or separator-aware containment. Legacy `test.js` uses the
-current relative `./db/` constructor path and was inspected but not executed
-because doing so would create repository-local state.
+Before the platform-capability characterization, existing automated tests
+created uniquely named OS-temporary directories and cleaned up their own paths
+while characterizing current construction, reopen, failure propagation, and
+persisted preimages. They did not prove non-following metadata, native
+canonicalization, link-like evidence, generic Windows reparse detection,
+device continuity, hard-link count, filesystem object identity, or
+separator-aware containment.
+
+The later merged `test/filesystem-capabilities.test.cjs` is test-only
+characterization. Each suite execution creates exactly one task-owned
+OS-temporary tree, uses non-following metadata and native `realpath`, exercises
+creation collision, containment, ordering, hard-link, and Windows junction
+evidence, and proves bounded exact-tree cleanup. On the characterized host its
+receipt confirmed those categories but retained `capability-gap` for generic
+arbitrary Windows reparse detection and retained overall qualification
+`no-go`. It neither imports production Moxley nor implements traversal.
+
+Legacy `test.js` uses the current relative `./db/` constructor path and was
+inspected but not executed because doing so would create repository-local
+state.
 
 The following is an **inference** from those source facts: current
 `existsSync()` and direct path use cannot establish the filesystem identity and
@@ -1444,45 +1459,322 @@ path behavior:
 
 The exact public open/create API names and shapes, rollback after failed
 new-root post-checks, stable error API, general numeric resource limits,
-platform-specific reparse evidence, handle-relative traversal, locking,
-concurrent writers, atomicity, journaling, recovery, durability, collection
-and binding qualification, executable-content policy, migration, repair,
-runtime implementation, package version, release, npm publication, adapter,
-and Thoth behavior remain deferred.
+native-addon implementation and loading, compiler and build configuration,
+handle-relative traversal, locking, concurrent writers, atomicity,
+journaling, recovery, durability, collection and binding qualification,
+executable-content policy, migration, repair, runtime implementation, package
+version, release, npm publication, adapter, and Thoth behavior remain
+deferred.
 
 The truthful disposition remains a **no-go for complete version-1
-qualification**. The filesystem policy is now selected, but it has no
-test-only platform capability evidence and no runtime implementation.
-Executable content, collection/binding scope, complete `_keys` correspondence,
-and the complete accepted state/data schema also remain unresolved.
+qualification**. The filesystem policy and a bounded set of test-only host
+observations now exist, but generic Windows reparse classification is not
+implemented or build-characterized. Executable content, collection/binding
+scope, complete `_keys` correspondence, and the complete accepted state/data
+schema also remain unresolved.
 
-## 49. Next independently testable slice
+## 49. Completed platform-capability characterization
 
-The next dependency-ordered slice is test-only platform-capability
-characterization. It must not change production source or claim that a host is
-qualified merely because a subset of probes succeeds.
+The Windows reparse decision input baseline includes the merged test-only
+platform-capability characterization. It added no production source,
+persisted fixture, dependency, lockfile, or documentation-policy behavior.
 
-Using one uniquely named task-owned OS-temporary tree whose resolved path is
-verified outside the repository, that later slice should safely characterize,
-where the host exposes the capability:
+The seven non-concurrent tests use one task-owned directory created by
+`mkdtemp()` under `os.tmpdir()` per suite execution. On the decision host,
+Windows Node `lstat`, native `realpath`, non-recursive creation collision,
+separator-aware containment, deterministic canonical ASCII and raw-byte
+ordering, stable device/object/link-count fields, a task-owned hard link, and
+a task-owned directory junction all produced confirmed characterization
+evidence. The exact owned tree was revalidated before bounded cleanup and its
+absence was confirmed with `ENOENT`.
 
-- ordinary existing-directory and regular-file non-following metadata;
-- an absent target versus an existing target;
-- one non-recursive final-directory creation and collision failure;
-- native `realpath` behavior;
-- following metadata versus non-following metadata;
-- symbolic-link evidence and, on Windows where safely permitted, junction and
-  generic reparse evidence;
-- regular-file hard-link count;
-- device or volume and object/inode identity stability;
-- separator-aware strict-descendant containment;
-- deterministic canonical-relative-path ordering; and
-- cleanup of only the exact task-owned temporary tree after its resolved path
-  is reverified.
+The in-memory receipt recorded:
 
-The characterization must fail closed or report an exact platform evidence
-gap if any required security category cannot be demonstrated. It must not skip
-a symlink, junction/reparse, device, object-identity, link-count, or ordering
-gap and then claim qualification. It must not touch unrelated or pre-existing
-temporary state, modify persisted fixtures, construct or load a Moxley
-database, select locking, or implement production traversal.
+- platform `win32`;
+- Node `v24.13.0`;
+- every characterized category above as `confirmed`;
+- generic arbitrary Windows reparse detection as `capability-gap`;
+- cleanup as `confirmed`; and
+- overall qualification as `no-go`.
+
+`lstat().isSymbolicLink()` on the task-owned junction and `realpath()` target
+resolution are useful observed evidence. They are not a generic query for
+every Windows reparse category and are not accepted as a substitute for the
+native classification selected below.
+
+## 50. Windows authority audit and evidence labels
+
+The reparse-boundary audit inspected complete `STATE_COMPATIBILITY.md`,
+`index.js`, both manifests and the lockfile, README, legacy `test.js`, the
+Apache-2.0 license and repository licensing records, every automated test and
+worker, all 19 persisted fixtures, the merged history from PR #12 through PR
+#23, and the relevant PR descriptions. No persisted executable content was
+run and no database or additional filesystem probe tree was created.
+
+This section uses four explicit evidence labels:
+
+- **Observed fact** means live repository, source, test receipt, or read-only
+  host evidence.
+- **Documented API fact** means a statement supported by the primary Microsoft
+  or Node.js documentation recorded below.
+- **Selected policy** means David Giles's future Moxley decision; it is not
+  current runtime behavior.
+- **Deferred decision** means no implementation or compatibility authority has
+  been selected yet.
+
+The following are **observed facts**:
+
+- current `index.js` uses JavaScript `fs.existsSync`, `mkdirSync`,
+  `readdirSync`, `readFileSync`, and `writeFileSync`; it has no native addon,
+  Windows handle query, generic reparse classification, or production
+  preflight;
+- `package.json` has no addon, native wrapper, build helper, `engines` field, or
+  dependency beyond `flatted`;
+- the repository and future original Moxley work are Apache-2.0 licensed under
+  the ownership record in `LICENSING.md`;
+- the decision host reports `win32`, `x64`, Node `v24.13.0`, Windows 11 Home
+  version 25H2 build `26200.8875`, and a fixed local NTFS volume for both the
+  repository and task-temporary characterization;
+- `Get-ComputerInfo` identifies the host as Windows 11 Home while the legacy
+  `CurrentVersion.ProductName` registry field reports Windows 10 Home; the
+  build and Microsoft release record, not that stale label, support the
+  Windows 11 observation; and
+- the merged capability receipt does not prove generic arbitrary reparse
+  classification.
+
+The following is an **inference**: a JavaScript-only combination of the
+currently characterized `lstat().isSymbolicLink()` and `realpath()` evidence
+cannot satisfy the selected requirement to classify every accepted object's
+generic Windows reparse attribute. That inference selects no implementation by
+itself; the owner selection below supplies the authority.
+
+## 51. Primary source record and documented API facts
+
+The following primary sources were retrieved on 2026-07-30:
+
+- Microsoft [`CreateFileW`](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilew);
+- Microsoft
+  [`GetFileInformationByHandleEx`](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-getfileinformationbyhandleex);
+- Microsoft
+  [`FILE_ATTRIBUTE_TAG_INFO`](https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_attribute_tag_info);
+- Microsoft
+  [reparse-point operations](https://learn.microsoft.com/en-us/windows/win32/fileio/reparse-point-operations);
+- Microsoft
+  [Windows 11 release information](https://learn.microsoft.com/en-us/windows/release-health/windows11-release-information);
+  and
+- Node.js [Node-API](https://nodejs.org/api/n-api.html).
+
+Those sources establish these **documented API facts**:
+
+- `CreateFileW` permits `dwDesiredAccess` zero for metadata queries, supports
+  read/write/delete sharing, opens an existing object with `OPEN_EXISTING`,
+  uses `FILE_FLAG_OPEN_REPARSE_POINT` to avoid normal reparse processing, and
+  requires `FILE_FLAG_BACKUP_SEMANTICS` to obtain a directory handle;
+- a null `lpSecurityAttributes` makes the returned handle non-inheritable;
+- `GetFileInformationByHandleEx` accepts `FileAttributeTagInfo` and returns
+  `FILE_ATTRIBUTE_TAG_INFO`, whose fields are `FileAttributes` and
+  `ReparseTag`;
+- Microsoft identifies `FILE_ATTRIBUTE_REPARSE_POINT` as the attribute that
+  indicates an associated reparse point, while `FSCTL_GET_REPARSE_POINT`
+  retrieves the reparse payload;
+- Microsoft documents Windows 11 25H2 as OS build 26200, consistent with the
+  live build observation; and
+- Node-API is stable and ABI-stable across Node versions when an addon confines
+  its Node boundary to Node-API. Node's documentation specifically distinguishes
+  `node_api.h` from V8, Node internal C++ APIs, and direct libuv APIs, which do
+  not share that cross-major ABI guarantee.
+
+Microsoft's historical minimum-client and minimum-server statements describe
+API availability. They are not a Moxley support, test, distribution, or
+qualification claim.
+
+## 52. Selected Windows reparse-classification mechanism
+
+David Giles selects this future mechanism:
+
+1. Generic Windows reparse classification is performed only by a first-party,
+   in-repository Windows Node-API addon.
+2. The addon is an internal Moxley implementation component. It is not a
+   public package, exported public API, or separately supported interface.
+3. Its source will be original Moxley code under the repository's Apache-2.0
+   license.
+4. Its Node boundary uses stable Node-API through `node_api.h` only. It must
+   not use V8, Node internal C++ APIs, `node.h`, `node_object_wrap.h`, or direct
+   libuv APIs.
+5. Its classification operation uses only Windows system APIs.
+6. It must not invoke PowerShell, .NET subprocesses, WMI, `fsutil`, shell
+   commands, external executables, or network services.
+7. Node `lstat().isSymbolicLink()` and `realpath()` remain characterization
+   evidence but are not generic Windows reparse-classification authority.
+8. There is no permissive, JavaScript-only, or best-effort fallback. Addon
+   absence, load failure, unsupported status, or incomplete native evidence
+   fails closed.
+
+This **selected policy** closes only the mechanism-selection gap. This
+documentation does not add, build, load, or call an addon.
+
+## 53. Exact selected native operation
+
+For each already-existing filesystem object that a future hardened traversal
+would otherwise consider accepting, the internal addon must perform this
+operation:
+
+1. Call `CreateFileW` for the exact object with:
+   - `dwDesiredAccess = 0` for metadata-only access;
+   - `dwShareMode = FILE_SHARE_READ | FILE_SHARE_WRITE |
+     FILE_SHARE_DELETE`;
+   - `lpSecurityAttributes = NULL`, producing a non-inheritable handle;
+   - `dwCreationDisposition = OPEN_EXISTING`;
+   - `dwFlagsAndAttributes = FILE_FLAG_OPEN_REPARSE_POINT |
+     FILE_FLAG_BACKUP_SEMANTICS`; and
+   - `hTemplateFile = NULL`.
+2. Treat `INVALID_HANDLE_VALUE` as classification failure and retain the
+   original `GetLastError()` value as internal causal evidence.
+3. Call `GetFileInformationByHandleEx` with
+   `FileAttributeTagInfo`, a correctly sized `FILE_ATTRIBUTE_TAG_INFO`
+   destination, and the handle returned above.
+4. Treat a false return as classification failure and retain the original
+   `GetLastError()` value as internal causal evidence.
+5. Inspect both `FILE_ATTRIBUTE_TAG_INFO.FileAttributes` and
+   `FILE_ATTRIBUTE_TAG_INFO.ReparseTag`.
+6. Reject the object whenever `FILE_ATTRIBUTE_REPARSE_POINT` is present,
+   regardless of the tag value or whether the tag is recognized.
+7. Fail closed on incomplete, contradictory, or malformed attribute/tag
+   evidence rather than normalizing it.
+8. Close the handle on every success and failure path after handle acquisition.
+
+`FSCTL_GET_REPARSE_POINT` is not required for the acceptance decision. A later
+slice may consider it for bounded internal diagnostics, but inability to
+retrieve optional reparse payload data must never convert a reparse object
+into an accepted object.
+
+This classification result is evidence about the object represented by the
+open handle during that bounded operation. It does not authorize path
+traversal, file reads, writes, creation, deletion, normalization, or
+reconstruction.
+
+## 54. Fail-closed result and error boundary
+
+Future classification rejects or stops as unsupported for:
+
+- handle-open failure;
+- unsupported or failed `FileAttributeTagInfo` query;
+- incomplete, contradictory, truncated, or malformed native evidence;
+- helper absence, load failure, initialization failure, or incompatible
+  binary;
+- unsupported platform, architecture, Node version, OS/build, or filesystem;
+- any detected `FILE_ATTRIBUTE_REPARSE_POINT`, regardless of `ReparseTag`;
+- inability to close or account for a successfully acquired handle; or
+- any attempt to substitute path-only JavaScript evidence for the selected
+  native result.
+
+The implementation must preserve the original Windows error code internally
+as causal evidence before cleanup can overwrite thread-local last-error state.
+This slice does not select a caller-visible JavaScript error class, error code,
+message, public method, or wire shape.
+
+An absent `FILE_ATTRIBUTE_REPARSE_POINT` bit is necessary for acceptance on
+the selected target, not sufficient for whole-object or whole-database
+acceptance. Object type, containment, device identity, link count, unique
+physical identity, persisted evidence, and every later gate still apply.
+
+## 55. Initial platform and source-distribution boundary
+
+The initial future qualification target is deliberately narrow:
+
+- platform: `win32`;
+- architecture: `x64`;
+- Node line: `>=24.13.0 <25`;
+- OS: Windows 11 x64; and
+- filesystem: fixed local NTFS.
+
+This is not current runtime support and does not change `package.json`
+`engines`, package version, dependency metadata, or release policy. The live
+characterization is specifically Windows 11 Home 25H2 build `26200.8875`,
+x64, Node `v24.13.0`, on fixed local NTFS. It does not by itself qualify every
+Windows 11 edition, build, storage provider, or NTFS deployment.
+
+Until separately characterized and authorized, the target excludes:
+
+- Windows 10;
+- Windows Server;
+- Windows on ARM64;
+- 32-bit Windows;
+- Wine and compatibility layers;
+- network shares and remote filesystems;
+- non-NTFS and provider-specific filesystems;
+- other Node major versions; and
+- other architectures.
+
+Node-API's ABI-stability guarantee supports the selected implementation
+boundary. It does not qualify untested Node versions, Windows versions or
+builds, architectures, compiler/SDK combinations, filesystems, addon loading,
+or Moxley behavior.
+
+The first implementation slice is selected as source-only ownership:
+
+- no checked-in native binaries;
+- no downloaded prebuilds;
+- no install-time network downloader;
+- no third-party native wrapper; and
+- no release artifact or npm publication in this contract sprint.
+
+The exact compiler, MSVC and Windows SDK floor, build-system files, CI matrix,
+binary-signing policy, prebuilt-binary policy, and npm packaging behavior are
+**deferred decisions** for a separately authorized build-and-release contract.
+
+## 56. Limitations, nonclaims, and continuing no-go
+
+This mechanism decision does not implement or qualify:
+
+- native addon compilation or loading;
+- production preflight or traversal;
+- handle-relative traversal or intermediate-component race resistance;
+- TOCTOU protection;
+- safe create-new sequencing or rollback;
+- locking, concurrent readers, or concurrent writers;
+- atomic writes or commits;
+- journaling, recovery, crash behavior, durability, or acknowledgement;
+- migration, repair, or detector enforcement;
+- complete persisted-format qualification;
+- package release or npm state; or
+- adapter or Thoth behavior.
+
+A successful handle-based classification does not prove that a path still
+identifies the same object after the handle closes or when later path-based
+work occurs. It also does not prove that intermediate components were stable.
+Complete hardened Windows version-1 qualification therefore remains a
+**no-go**.
+
+Current runtime behavior is unchanged: it loads no addon, enforces none of
+these rules, and must not be described as Windows reparse-safe or version-1
+qualified.
+
+## 57. Next independently testable slice
+
+The next dependency-ordered slice is characterization/build-preflight only. It
+must remain isolated from Moxley production traversal and must not change
+runtime acceptance.
+
+On the exact approved Windows 11 x64, Node `>=24.13.0 <25`, fixed-local-NTFS
+target, that slice should:
+
+- add the smallest original, task-owned Node-API source necessary to expose
+  the selected classification result without creating a public API;
+- select and record the exact compiler, MSVC, Windows SDK, and build-tool
+  preflight needed for that isolated build;
+- compile and load the addon locally without checked-in binaries, downloaded
+  prebuilds, install-time networking, or third-party native wrappers;
+- classify task-owned ordinary files and directories;
+- classify a task-owned junction and, where permissions permit, a task-owned
+  symbolic link;
+- characterize any other safely constructible task-owned reparse evidence;
+- assert fail-closed behavior for addon load/query failure and malformed
+  result evidence;
+- preserve Windows causal error codes internally;
+- remove only exact task-owned build and filesystem paths; and
+- end with an explicit qualification no-go.
+
+That slice must not wire the addon into constructors, loaders, preflight,
+traversal, creation, migration, package publication, or ordinary runtime
+behavior.
