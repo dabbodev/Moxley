@@ -1,9 +1,10 @@
 # Moxley State Compatibility Policy
 
 Status: Marker separability, future node identity, derived runtime-location
-authority, root-input lexical rules, and persisted-name grammar selected;
-version-1 qualification remains a no-go pending other decisions; runtime
-support remains unimplemented.
+authority, root-input lexical rules, persisted-name grammar, and filesystem
+canonicalization and containment policy selected; version-1 qualification
+remains a no-go pending platform-capability evidence and other decisions;
+runtime support remains unimplemented.
 Date: 2026-07-29
 Historical behavior baseline: `518ab5ab58500a84246770e8ef0180856e127abd`
 Discriminator decision input baseline: `635a7c09bcca63c3abbb52d5c2fbbce4b87a9817`
@@ -12,6 +13,8 @@ Node-identity decision input baseline: `a2b06a9eecec16aa55869be1748dd03edff6b2ba
 Runtime-location decision input baseline: `0be070c041644ecd5c4ef2138f4654c17f15dcb3`
 Root-input and persisted-name decision input baseline:
 `44000d8625b5ba724bb090bd61ef287e3ac699f6`
+Filesystem containment decision input baseline:
+`f65acb4a413b462bd2ff8be1f5d668a9b151768a`
 Decision authority: David Giles, sole owner of Moxley
 
 These repository baselines are evidence and decision inputs. None is a
@@ -155,7 +158,11 @@ not identify a persisted format.
 This decision record does not implement:
 
 - writing the marker during creation;
-- a fresh-versus-existing-directory decision;
+- separate existing-database opening and new-database creation operations;
+- root canonicalization, non-following entry inspection, or contained
+  traversal;
+- filesystem type, link, reparse, device, object-identity, or link-count
+  enforcement;
 - parsed-value marker detection;
 - whole-database preflight or traversal;
 - fail-closed loader enforcement;
@@ -203,12 +210,20 @@ classifier rejects any own `_loc` property, treats deployment-root labels as
 non-persisted inputs, and characterizes same-parent slot relabeling without
 runtime construction, loading, or path resolution.
 
-The repository now contains 16 fixed persisted-preimage files. Every state
+PR #21 added a separate synthetic encoded-name tree. Its state bytes are
+identical to the locless fixture states, its child occupies exact slot `n_0`,
+and its UUID-only link is named
+`k_64657363656e64616e74.ml`, the canonical lowercase-hex encoding of logical
+alias `descendant`. Test-only helpers characterize strict NFC, UTF-8,
+lowercase-hex, typed-entry, collision, slot, and root-input lexical rules
+without filesystem resolution or runtime loading.
+
+The repository now contains 19 fixed persisted-preimage files. Every state
 preimage that predates the locless tree, including the UUID-characterization
 states, retains the sentinel `_loc` value selected for its earlier evidence
-purpose. Those bytes remain immutable. The identity and locless trees prove
-their selected layers independently, but neither uses the final typed physical
-name grammar selected below and neither is an accepted version-1 database.
+purpose. Those bytes remain immutable. The identity, locless, and encoded-name
+trees prove their selected layers independently. None is an accepted
+version-1 database or filesystem-containment fixture.
 
 ## 8. Persisted-evidence audit method and labels
 
@@ -245,13 +260,13 @@ version-1 qualification evidence.
 
 | Category | Writer | Reader and exact known logical shape | Relationships | Execution and mutation boundary | Current validation and evidence | Version-1 disposition and missing decision |
 | --- | --- | --- | --- | --- | --- | --- |
-| Root and child node state: `_state.ms` | **Source fact:** `DB._saveState()` writes `flatted.stringify(state)`. Current fields, in writer order, are `_loc`, `_id`, `_name`, `_keys`, `_bindings`, plus optional `_childTemplate` containing another flatted string. **Selected authority:** a future version-1 root adds exact `_format: "moxley-db"` and integer `_formatVersion: 1`; every future version-1 node has UUID `_id` and `_parentId`, and root and child state omit `_loc`. | **Source fact:** `DB._loadState(loc)` selects `<loc>_state.ms` from its runtime argument and parses it. `_loadFromDir()` copies root `_keys` and `_bindings`, reconstructs optional `_childTemplate`, and reads child `_name`; it does not assign saved `_loc` or preserve saved child `_id`. Current master does not write or enforce the marker, UUID, `_parentId`, or locless contract. | Current `_loc` names a runtime path; current `_id` is root `0` or a positional child path. Future version-1 physical parentage is selected through `_parentId`; runtime location is derived from the opened root and physical traversal and is not persisted identity. | Parsing ordinary fields does not itself execute code. Reconstructing `_childTemplate` creates function-source-bearing template state. `DB`, child, proxy, and collection constructors are filesystem-mutation-capable: missing derived locations can be created and proxy assignments can persist files. | **Test or fixture evidence:** fixed historical, corrected-child, marker-only, UUID-identity, and locless preimages characterize their selected layers. Other tests characterize recursive readiness, parse-failure propagation, restart reconstruction, and duplicate positional children. **Source fact:** current load ignores saved `_loc` as traversal authority but does not reject or validate it and does not comprehensively validate the other relationships. | **Partially selected for future version 1:** UUID, `_parentId`, locless node-state semantics, exact internal state names, root-input lexical rules, and typed physical naming are defined below. Serialization, loading, generation, containment, validation, collection identity, and the complete accepted schema remain unimplemented or unresolved. |
+| Root and child node state: `_state.ms` | **Source fact:** `DB._saveState()` writes `flatted.stringify(state)`. Current fields, in writer order, are `_loc`, `_id`, `_name`, `_keys`, `_bindings`, plus optional `_childTemplate` containing another flatted string. **Selected authority:** a future version-1 root adds exact `_format: "moxley-db"` and integer `_formatVersion: 1`; every future version-1 node has UUID `_id` and `_parentId`, and root and child state omit `_loc`. | **Source fact:** `DB._loadState(loc)` selects `<loc>_state.ms` from its runtime argument and parses it. `_loadFromDir()` copies root `_keys` and `_bindings`, reconstructs optional `_childTemplate`, and reads child `_name`; it does not assign saved `_loc` or preserve saved child `_id`. Current master does not write or enforce the marker, UUID, `_parentId`, or locless contract. | Current `_loc` names a runtime path; current `_id` is root `0` or a positional child path. Future version-1 physical parentage is selected through `_parentId`; runtime location is derived from the opened root and physical traversal and is not persisted identity. | Parsing ordinary fields does not itself execute code. Reconstructing `_childTemplate` creates function-source-bearing template state. `DB`, child, proxy, and collection constructors are filesystem-mutation-capable: missing derived locations can be created and proxy assignments can persist files. | **Test or fixture evidence:** fixed historical, corrected-child, marker-only, UUID-identity, locless, and encoded-name preimages characterize their selected layers. Other tests characterize recursive readiness, parse-failure propagation, restart reconstruction, and duplicate positional children. **Source fact:** current load ignores saved `_loc` as traversal authority but does not reject or validate it and does not comprehensively validate the other relationships. | **Partially selected for future version 1:** UUID, `_parentId`, locless node-state semantics, exact internal state names, root-input lexical rules, typed physical naming, and the filesystem qualification policy are defined below. Serialization, loading, generation, platform-capability proof, collection identity, and the complete accepted schema remain unimplemented or unresolved. |
 | Node data: `*.md` | **Source fact:** the proxy `set` path writes `flatted.stringify(value)` to `<key>.md` and adds a new property name to node `_keys`. | **Source fact:** proxy `get` lazily reads and `flatted.parse`s `<key>.md` when the property is not already materialized. The logical value is any value accepted by the current flatted writer; no narrower persisted schema is selected. | Each filename stem is intended to correspond to one `_keys` entry on the containing node. **Selected authority:** a future version-1 data entry uses `k_<hex>.md`, where `<hex>` canonically encodes the normalized logical key. | Lazy data parsing does not call `eval`. Ordinary construction and later proxy writes remain mutation-capable, but a future preflight must not use them. | No current fixed preimage contains `*.md`. Current loading does not prove a one-to-one relation between `_keys` and data/link/function files, reject extra evidence, or reject missing or multiply typed evidence for one key. | **Partially selected:** the logical-name and physical-filename grammar is defined below. A serializable-data schema, complete `_keys` relationship, flatted-value limits, and runtime enforcement remain unresolved. |
-| Named node links: `*.ml` | **Source fact:** assigning a current node through the proxy writes the target node's textual positional `_id` to `<key>.ml` and adds the stem to parent `_keys`. | **Source fact:** current lazy proxy access reads the file as text and resolves it through root `_getById()`, which traverses numeric child positions. The characterized legacy bytes for `descendant.ml` are exactly `0/0`. | The filename stem is the alias key and a parent `_keys` entry. **Selected authority:** future version-1 node links contain a target UUID, use `k_<hex>.ml`, and resolve through the complete same-database node-ID index; they are references, not ownership edges. | Reading current link text does not evaluate code or directly write, but target resolution depends on a constructor-reconstructed positional graph, and that construction path is mutation-capable. Future preflight resolution must occur before reconstruction without writes. | **Test or fixture evidence:** PR #14 proves byte identity of historical, post-PR #11, and marker-only positional links. PR #17 and PR #19 add synthetic UUID-only link evidence without runtime loading; their direct `descendant.ml` names predate the typed grammar. | **Selected for future version-1 node links only:** exact UUID bytes, same-tree resolution, alias semantics, failure conditions, and typed filename grammar are defined below. Collection item links, `_bindings`, and runtime enforcement remain deferred. |
+| Named node links: `*.ml` | **Source fact:** assigning a current node through the proxy writes the target node's textual positional `_id` to `<key>.ml` and adds the stem to parent `_keys`. | **Source fact:** current lazy proxy access reads the file as text and resolves it through root `_getById()`, which traverses numeric child positions. The characterized legacy bytes for `descendant.ml` are exactly `0/0`. | The filename stem is the alias key and a parent `_keys` entry. **Selected authority:** future version-1 node links contain a target UUID, use `k_<hex>.ml`, and resolve through the complete same-database node-ID index; they are references, not ownership edges. | Reading current link text does not evaluate code or directly write, but target resolution depends on a constructor-reconstructed positional graph, and that construction path is mutation-capable. Future preflight resolution must occur before reconstruction without writes. | **Test or fixture evidence:** PR #14 proves byte identity of historical, post-PR #11, and marker-only positional links. PR #17 and PR #19 add synthetic UUID-only link evidence without runtime loading; PR #21 adds the same UUID-only bytes under canonical encoded link name `k_64657363656e64616e74.ml`. | **Selected for future version-1 node links only:** exact UUID bytes, same-tree resolution, alias semantics, failure conditions, and typed filename grammar are defined below. Collection item links, `_bindings`, and runtime enforcement remain deferred. |
 | Stored functions: `*.mf` | **Source fact:** assigning a new function writes `Function.prototype.toString()`-style source through `arg.toString()` and adds the stem to `_keys`. | **Source fact:** lazy proxy access reads the source, passes it to `eval`, binds the resulting function to the origin node, and returns it. | The stem is a node `_keys` entry. Template hooks can store textual function IDs and resolve them through `_findFunction()`, which reaches the same lazy function reader. **Selected authority:** `k_<hex>.mf` is reserved as the future typed classification name only. | Reading the property crosses an `eval` boundary. Calling it or resolving a hook can execute persisted code with node access. The enclosing constructor-backed graph is mutation-capable even before later property writes. | No fixed preimage or automated qualification test covers `*.mf`, source grammar, origin binding, hook reference integrity, or code-execution policy. | **Unresolved and not approved for version 1.** Reserving the typed suffix does not approve executable persistence. David Giles must explicitly choose whether executable persisted evidence is included, excluded, or governed by a separate trust policy. |
 | Collections: dotless directory, `_colstate.mc`, per-item `*.ml`, and node `_bindings` | **Source fact:** `DC._saveState()` writes a flatted object with `_loc`, `_name`, `_keys`, and `_indexBy`, plus optional `_keySort`, `_itemSort`, and `_accept` function source. Proxy assignment of node items writes textual-ID `*.ml` entries. `DB._bind()` stores collection IDs in node `_bindings`. | **Source fact:** `DC` derives runtime `_loc` as parent `_loc` plus collection name. A dotless entry without child `_state.ms` is constructed as a collection. `DC._loadState()` parses `_colstate.mc`, ignores saved `_loc`, and evaluates optional callback sources. A collection ID is derived from parent node ID plus directory/name rather than stored in `_colstate.mc`. | Collection `_keys` correspond to item-link stems; each link should resolve to a node; `_indexBy` influences keys; `_bindings` must resolve to a collection; parent path, collection name, and derived ID must agree. | Collection state loading evaluates callback source. `_accept`, `_keySort`, and `_itemSort` may execute during add/sort behavior. Collection construction can create a missing derived directory, and proxy-based item insertion can write links and state. | Current tests and fixtures do not give collections equivalent reconstruction, readiness, callback, binding, or restart coverage. Current load starts constructor-backed collection state loading without an equivalent complete readiness contract and does not validate its relationships. | **Unresolved.** Collections are not approved for version 1. The exact `c_<hex>` directory namespace and `_colstate.mc` reservation are selected only for unambiguous future classification. They do not select collection schema, identity, callbacks, links, bindings, or lifecycle. |
 | Templates: node `_childTemplate` | **Source fact:** `DT` converts `apply` and function-valued nested fields to source strings; `DT.toString()` flatted-serializes `{strict, apply, keys}`; node `_saveState()` embeds that string in `_state.ms`. | **Source fact:** `_loadFromDir()` parses the nested string and constructs `DT`. Template initialization assigns defaults, contains a function-default evaluation branch, evaluates and invokes `apply`, and saves state. Proxy assignment evaluates and invokes validators. Hooks resolve stored function references and invoke them. | The parent carries the child template; newly created children receive it. Nested key rules relate defaults, validators, and hooks to node properties and stored functions. | `apply` and validators cross `eval` and invocation boundaries. Hooks can evaluate and invoke `*.mf`. The source contains a default-function evaluation path, while `DT` serializes function-valued fields to strings; the persisted default-function lifecycle has no qualification proof. Template application writes defaults and state. | No fixed preimage or automated qualification suite covers nested template framing, validator/default/apply/hook reconstruction, rejection behavior, or execution order. | **Unresolved and not approved for version 1.** Executable-template policy, hook/reference semantics, exact nested schema, and lifecycle evidence require owner decisions and dedicated fixtures. |
-| Directory and entry classification | **Source fact:** root, child, and collection constructors create their expected directories when absent; there is no persisted directory type tag. | **Source fact:** `_loadFromDir()` enumerates a directory, ignores entries whose names contain `.`, forms a candidate child path by string concatenation, classifies a dotless entry with `<entry>/_state.ms` as a child, and otherwise constructs it as a collection. `path.resolve()` is used only to compare a candidate with already reconstructed child locations, not to establish the opening root or enforce containment. | Physical entries must eventually agree with state, UUID, parent, keys, collection, link, and binding evidence. **Selected authority:** future traversal locations come only from the resolved root and directly enumerated relative entries, never persisted `_loc`; exact typed entry names are defined below. | Current classification uses constructor-backed reconstruction before whole-tree validation; those paths can write and can reach executable collection or template evidence. | Tests characterize selected child recursion and failure propagation, not an exhaustive allowed-entry grammar. Existing fixtures use legacy `0` slots and direct `descendant.ml` names. No current test characterizes the new typed grammar, containment, symlinks, or junctions. | **Partially selected:** root-input lexical rules, typed entry grammar, canonical encoding, and fail-closed unknown-entry treatment are selected. Canonicalization, containment, filesystem-object policy, implementation, and complete relationship validation remain unresolved. |
+| Directory and entry classification | **Source fact:** root, child, and collection constructors create their expected directories when absent; there is no persisted directory type tag. | **Source fact:** `_loadFromDir()` enumerates a directory, ignores entries whose names contain `.`, forms a candidate child path by string concatenation, classifies a dotless entry with `<entry>/_state.ms` as a child, and otherwise constructs it as a collection. `path.resolve()` is used only to compare a candidate with already reconstructed child locations, not to establish the opening root or enforce containment. | Physical entries must eventually agree with state, UUID, parent, keys, collection, link, and binding evidence. **Selected authority:** future traversal locations come only from the canonical root and directly enumerated, non-link, contained relative entries, never persisted `_loc`; exact typed entry names and filesystem qualification rules are defined below. | Current classification uses constructor-backed reconstruction before whole-tree validation; those paths can write and can reach executable collection or template evidence. | Tests characterize selected child recursion and failure propagation. PR #21 characterizes the typed lexical grammar only; no current test supplies the required `realpath`, non-following metadata, link/reparse, device, object-identity, or link-count platform evidence. | **Partially selected:** root-input lexical rules, typed entry grammar, canonical encoding, separate open/create modes, canonicalization sequence, containment, accepted object types, and fail-closed link/device/object policy are selected. Implementation, platform-capability proof, locking, and complete relationship validation remain unresolved. |
 
 ## 10. Cross-category limitations confirmed by live source
 
@@ -294,6 +309,20 @@ The following are **source facts** or direct **inferences** from the matrix:
   `1`, not typed slot names. `_loadFromDir()` ignores every entry whose name
   contains a dot and classifies every remaining entry by the presence or
   absence of child `_state.ms`; it does not fail closed for unknown entries.
+- Current root setup conflates two modes: `_scanLocation()` creates the
+  caller-supplied root with one `fs.mkdirSync()` call when `fs.existsSync()`
+  reports absence and otherwise adopts the existing path. It does not first
+  require an ordinary directory, distinguish an empty collision, canonicalize
+  the parent or root, or post-check a new root.
+- Current production code does not call `lstat`, `realpath`, `opendir`, or any
+  symbolic-link classifier. It reads no `dev`, `ino`, or `nlink` evidence and
+  maintains no filesystem-object identity set. It therefore does not enforce
+  non-following metadata inspection, reject symlinks or reparse points, detect
+  device crossings or hard links, detect physical aliases or cycles, or
+  establish separator-aware containment.
+- Current `fs.mkdirSync()` failures propagate from constructors. Production
+  source contains no corresponding rollback, deletion, rename, or cleanup
+  path after creation.
 - As an inference from direct string concatenation, caller or persisted logical
   names can currently influence filesystem interpretation, including separator
   and dot behavior. The exact result is host-filesystem-dependent and is not a
@@ -335,8 +364,10 @@ If and only if a version-1 evidence set is later selected, a future read-only
 preflight must follow this dependency order:
 
 1. Validate the selected root-input lexical class without writing.
-2. Apply the later-selected canonicalization and containment policy.
-3. Establish whether the target is an existing database without writing.
+2. Select the future semantic mode: open an existing database or create a new
+   database.
+3. Apply the selected root canonicalization, object-type, link/reparse, and
+   containment policy without adopting pre-existing bytes in create-new mode.
 4. Read and parse root `_state.ms`.
 5. Classify marker absence, malformed marker, unknown format, and unsupported
    version.
@@ -366,25 +397,32 @@ filesystem mutation while locking and race policy remain deferred.
 
 ## 13. Semantic classification precedence
 
-A later preflight contract must classify failures in this semantic order,
+The selected future preflight classifies failures in this semantic order,
 without this document inventing a public error class, error code, or final
 message format:
 
-1. Filesystem, access, or read failure, preserving the original cause.
-2. Malformed root framing or root parse failure.
-3. Validly parsed root with a missing, malformed, unknown, or unsupported
-   marker.
-4. Unsupported entry or feature category.
-5. Malformed or contradictory marked-tree evidence.
-6. Relationship or reference inconsistency.
-7. Success only after the complete selected evidence set passes.
+1. Invalid root input or missing or invalid semantic mode.
+2. Root existence, object-type, link, or reparse failure.
+3. Root canonicalization failure.
+4. Root-state access, read, framing, parse, or marker failure, preserving an
+   underlying filesystem cause where one exists.
+5. Raw entry-name failure.
+6. Entry object-type, link, or reparse failure.
+7. Containment, device, hard-link, or repeated physical-object-identity
+   failure.
+8. Persisted content, feature, structural, relationship, or reference
+   failure.
+9. Success only after the complete selected evidence set passes.
 
-Current ordinary loading uses filesystem enumeration order and has no
-independent preflight defect sorter. This record therefore does not select a
-relative-path tie-breaker for multiple peer defects. A later contract may
-select deterministic normalized relative-path ordering for the future
-preflight only after confirming that doing so does not change ordinary load
-order or imply current enforcement.
+Peer entries are processed in deterministic canonical-relative-path order.
+Valid canonical ASCII physical names sort bytewise. Invalid raw names are
+never normalized or renamed. Where invalid peer names must be ordered, the
+implementation must use stable raw-name byte ordering if the platform exposes
+it. If stable raw-name bytes are unavailable, this record does not claim
+cross-process deterministic precedence for that case.
+
+This ordering applies only to a future independent preflight. Current ordinary
+loading uses filesystem enumeration order and does not implement it.
 
 ## 14. Current identity and link behavior
 
@@ -619,12 +657,13 @@ child node state:
   sibling path, drive, UNC target, URI, symlink target, or any other external
   location.
 
-Exact path containment and symlink, junction, reparse-point, and mount
-enforcement remain later contract and implementation decisions. If
-collections are later admitted to version 1, their runtime locations must use
-the same derived, non-persisted principle. That statement does not approve
-collections or select their persisted schema, identity, bindings, or
-lifecycle.
+The filesystem contract below now selects exact fail-closed containment and
+link, junction, detectable-reparse, mount/device, hard-link, and physical
+object-identity rules. Their platform-capability proof and implementation
+remain later gates. If collections are later admitted to version 1, their
+runtime locations must use the same derived, non-persisted principle. That
+statement does not approve collections or select their persisted schema,
+identity, bindings, or lifecycle.
 
 ## 22. Root runtime location
 
@@ -640,10 +679,13 @@ lifecycle.
 - Opening identical persisted bytes at another root does not create new node
   identities.
 
-This record does not select the exact public opening or creation API,
-canonicalization operation, `realpath` behavior, existence or open-versus-create
-semantics, or symlink policy. It does not claim that current constructor input
-handling already satisfies the selected lexical contract.
+The filesystem contract below separates open-existing and create-new
+semantics and selects their native-`realpath` canonicalization order. This
+record does not select public API names or shapes, exact handling of lexical
+dot segments and trailing separators, platform-returned drive-letter or case
+presentation, or implementation mechanics. It does not claim that current
+constructor input handling satisfies either the lexical or filesystem
+contract.
 
 ## 23. Child runtime location and physical placement
 
@@ -653,7 +695,8 @@ handling already satisfies the selected lexical contract.
   supplies a filesystem path.
 - A canonical future `n_<slot>` name supplies storage placement only.
 - Renaming a slot beneath the same physical parent does not change `_id` or
-  `_parentId`, subject to the later filename and path policy.
+  `_parentId`, provided the later operation preserves the selected typed-name
+  and containment policy.
 - Directory enumeration order does not change identity.
 - Moving a node beneath another physical parent makes `_parentId` disagree
   with physical ownership. The candidate must fail unless a separately
@@ -703,7 +746,11 @@ distributed coordination, or safe live relocation while writers exist.
   their link is still named `descendant.ml`. They prove locless identity
   evidence only; they are not canonical version-1 physical-name fixtures under
   the later decision in this record.
-- All 16 persisted-preimage files remain immutable characterization evidence.
+- PR #21 adds three separate encoded-name characterization files. Their state
+  bytes and UUID-only link bytes are identical to the locless evidence, while
+  the child uses slot `n_0` and the link uses canonical encoded name
+  `k_64657363656e64616e74.ml`. They prove the selected lexical layer only.
+- All 19 persisted-preimage files remain immutable characterization evidence.
 - Current runtime continues to persist `_loc`. No current database or fixture
   is silently converted.
 - Unversioned state remains legacy and unqualified.
@@ -720,8 +767,10 @@ A later implementation must establish location evidence in this dependency
 order:
 
 1. Validate the selected root-input lexical class without writing.
-2. Apply the later-selected canonicalization and containment policy.
-3. Read and parse root `_state.ms` from the resolved root.
+2. Select open-existing or create-new semantics and apply the selected root
+   canonicalization and containment policy.
+3. Inspect, read, and parse root `_state.ms` from the canonical root without
+   following a link or accepting a multiply linked file.
 4. Reject `_loc` in marked version-1 persisted node state.
 5. Establish the root's process-local runtime location.
 6. Enumerate direct relative entries without constructors or proxy writes.
@@ -740,35 +789,36 @@ during preflight.
 ## 27. Security limits and portability nonclaims
 
 Omitting persisted `_loc` removes one source of stale-path bytes and denies
-persisted node state path-redirection authority. The root lexical and typed-name
-decisions below close additional contract questions, but none is implemented.
-Together they do not solve:
+persisted node state path-redirection authority. The root lexical, typed-name,
+and filesystem decisions below close additional contract questions, but none
+is implemented. The selected filesystem contract is a bounded fail-closed
+observation and does not solve:
 
-- root canonicalization or existence;
 - dot-segment, separator-normalization, or trailing-separator handling;
-- filesystem containment;
-- drive-letter canonicalization or mounted-filesystem semantics;
-- symlinks, junctions, reparse points, or mount boundaries;
-- hard links;
 - time-of-check/time-of-use races;
+- inability of a platform to expose reliable reparse, device, object-identity,
+  or link-count evidence;
 - locking or concurrent mutation;
 - filesystem permissions; or
 - atomicity, recovery, or durability.
 
-Complete cross-platform portability and security qualification are not claimed.
-The selected canonical physical grammar avoids raw logical names and physical
-case variants; it does not establish containment or safe filesystem traversal.
+Complete cross-platform portability and security qualification are not
+claimed. The selected canonical physical grammar avoids raw logical names and
+physical case variants. The selected containment policy still requires
+platform evidence, race-safe implementation, and later locking decisions
+before any production qualification claim.
 
 ## 28. Explicit deferrals and nonclaims
 
 This record continues to defer:
 
-- the exact public opening and creation API;
+- public opening and creation API names and shapes;
+- rollback and error authority after a create-new post-check fails;
 - separator normalization, dot-segment handling, trailing-separator behavior,
-  drive-letter normalization, existence, and open-versus-create semantics;
-- root canonicalization, `realpath`, and containment;
-- symlink, junction, reparse-point, and mount policy;
-- hard-link policy and filesystem-object identity;
+  drive-letter presentation, and platform-returned path case;
+- generic Windows reparse-point detection and the platform adapters needed to
+  prove device, object/inode, and link-count evidence;
+- handle-relative traversal and race-resistant filesystem operations;
 - physical-slot allocation, reuse, bounds, deletion, compaction, and ordering;
 - Unicode confusable, bidirectional-text, whitespace, and UI-display policy;
 - collection and binding qualification;
@@ -789,11 +839,11 @@ This record continues to defer:
 - Moxley adapter or Thoth behavior.
 
 This record implements no marker writer, detector, migration, path
-normalization, name encoding, reconstruction, relocation, clone, or repair. It
-does not claim that current master reads or writes the selected locless or
-typed-name contract, that any existing database is version 1, or that the
-synthetic fixtures are accepted, portable, secure, durable, or
-runtime-supported state.
+normalization, name encoding, canonicalization, containment, reconstruction,
+relocation, clone, or repair. It does not claim that current master reads or
+writes the selected locless or typed-name contract, that any existing database
+is version 1, or that the synthetic fixtures are accepted, portable, secure,
+durable, or runtime-supported state.
 
 ## 29. Current root-input and persisted-name source audit
 
@@ -827,10 +877,11 @@ The following are **source facts** about current unversioned code and evidence:
 - Current source contains no Unicode NFC normalization, strict scalar-value
   check, UTF-8/lowercase-hex name encoding, reserved-name check, physical-name
   case check, decoded-name uniqueness check, or cross-type collision check.
-- Current tests and all 16 fixed preimages characterize only selected current,
-  historical, marker, identity, and locless behavior. The existing physical
-  exemplars use bare `0` slots and direct `descendant.ml` aliases. No existing
-  fixture implements the grammar selected below.
+- Current tests and 19 fixed preimages characterize selected current,
+  historical, marker, identity, locless, and encoded-name behavior. The 16
+  earlier preimages retain bare `0` slots and direct `descendant.ml` aliases.
+  PR #21's three encoded-name preimages implement the selected typed spelling
+  but do not exercise filesystem canonicalization or containment.
 
 The direct-concatenation consequences are **inferences**, not selected
 compatibility rules: dots can affect current directory classification,
@@ -867,11 +918,13 @@ variables or home-directory notation. The root is process-local runtime input
 and is never persisted in version-1 state. A lexically absolute root does not
 prove containment, canonical identity, existence, or filesystem safety.
 
-This contract does not yet select exact separator normalization, dot-segment
-handling, trailing-separator behavior, drive-letter normalization,
-canonicalization, `realpath`, existence checks, open-versus-create semantics,
-or symlink behavior. It also does not claim that a mounted or network-backed
-POSIX path can be identified reliably from the input string alone.
+The filesystem contract below selects separate existing-open and new-create
+modes, native-`realpath` canonicalization order, and fail-closed link and
+containment policy. Exact separator normalization, lexical dot-segment and
+trailing-separator handling, drive-letter presentation, and platform-returned
+case remain implementation prerequisites. This record does not claim that a
+mounted or network-backed POSIX path can be identified reliably from the input
+string alone.
 
 The exact public method signature remains deferred. Any later API must preserve
 this lexical boundary; it may not silently broaden it through coercion or
@@ -1011,7 +1064,9 @@ filesystem spelling.
   canonical version-1 physical names under this decision.
 - The `proposed-v1-locless` tree proves locless UUID and link evidence only. It
   is not relabeled as final physical naming.
-- Future encoded-name fixtures must be a separate synthetic tree.
+- PR #21's separate `proposed-v1-encoded-names` tree proves typed lexical
+  spelling only. It is not relabeled as canonicalization, containment, link,
+  mount, or hard-link evidence.
 - Unversioned state remains legacy and unqualified.
 - No current database is silently encoded, renamed, normalized, or upgraded.
 - Migration requires a separate, byte-complete mapping ledger and explicit
@@ -1027,7 +1082,8 @@ version 1.
 A later read-only implementation must apply this dependency order:
 
 1. Validate the root-input lexical class without writing.
-2. Apply the later-selected canonicalization and containment policy.
+2. Select open-existing or create-new mode and apply the filesystem
+   canonicalization and containment policy below.
 3. Enumerate raw directory entries.
 4. Match exact internal names or the typed physical grammar.
 5. Reject unknown, uppercase, malformed, or noncanonical physical names.
@@ -1041,19 +1097,19 @@ A later read-only implementation must apply this dependency order:
 
 Preflight performs no rename, case normalization, encoding repair, constructor
 call, proxy write, or persisted mutation. The typed grammar does not authorize
-runtime traversal before the later containment and filesystem-object policy is
-selected and implemented.
+runtime traversal before the selected containment and filesystem-object policy
+is implemented and its platform evidence is demonstrated.
 
 ## 37. Security effects and nonclaims
 
 Canonical typed encoding removes direct caller-controlled path syntax from
-future internal filenames and gives exact lexical categories. It does not by
-itself solve:
+future internal filenames and gives exact lexical categories. The filesystem
+contract below additionally selects containment and fail-closed physical
+object rules. Those documentation decisions do not by themselves solve:
 
-- containment;
-- root canonicalization;
-- symlinks, junctions, reparse points, or mounts;
-- hard links;
+- reliable cross-platform reparse, device, object-identity, and link-count
+  evidence;
+- handle-relative or otherwise race-resistant traversal;
 - time-of-check/time-of-use races;
 - filesystem permissions;
 - locking or concurrent writers;
@@ -1065,39 +1121,368 @@ itself solve:
 This record does not claim cross-platform portability or security
 qualification. Logical case sensitivity plus lowercase physical encoding
 avoids relying on physical filename case distinctions for logical case, but the
-later filesystem policy must still address containment, aliases, and races.
+filesystem implementation must still demonstrate the selected containment and
+alias policy and later close races.
 
-## 38. Qualification gate and next independently testable slice
+## 38. Encoded-name characterization disposition
 
-The future marker, node identity, named-link target, locless runtime-location
-authority, root-input lexical class, logical-name grammar, canonical encoding,
-and typed physical namespaces are now selected owner decisions. Complete
-version-1 qualification remains a no-go because containment and filesystem
-object policy, executable-content policy, collection and binding scope,
-complete `_keys` correspondence, the complete accepted state/data schema, and
-runtime evidence remain unresolved.
+PR #21 completed the previously identified encoded-name characterization
+slice. It preserves the earlier 16 preimages, adds exact `n_0` and
+`k_64657363656e64616e74.ml` spellings around byte-identical locless state and
+UUID-link evidence, and characterizes the specified lexical mutation matrix
+entirely in test-only code.
 
-The next independently testable slice is fixtures and characterization only.
-It should:
+That result closes mechanical name separability only. It does not establish
+root canonicalization, containment, filesystem object identity, runtime
+support, migration, portability, or security qualification.
 
-- preserve all 16 existing persisted-preimage files byte-for-byte;
-- add a separate synthetic encoded-name tree;
-- use child slot directory `n_0`;
-- use logical key `descendant`;
-- use canonical UTF-8/lowercase-hex
-  `64657363656e64616e74`;
-- use link filename `k_64657363656e64616e74.ml`;
-- retain locless root and child state, the fixed UUIDs, `_parentId`
-  relationships, the root marker, and exact UUID-only link bytes; and
-- avoid runtime construction, loading, traversal, mutation, or portability and
-  security claims.
+## 39. Current filesystem and constructor source audit
 
-That later slice should create mutation cases only in memory for uppercase and
-odd-length hex, invalid UTF-8, non-NFC decoded names, direct legacy filenames,
-unknown prefixes or extensions, duplicate decoded names, data/link/function/
-collection type collisions, node-slot leading zeros, and root-input lexical
-rejection.
+The filesystem audit for the containment decision inspected complete
+`index.js`, this policy, the complete README, legacy `test.js`, both manifests,
+every automated test and worker, and all 19 persisted-preimage files. It traced
+every production `fs.existsSync`, `fs.mkdirSync`, `fs.readdirSync`,
+`fs.readFileSync`, and `fs.writeFileSync` call and every production path
+operation. No database or temporary observation was created because the
+following behavior is visible directly in source and existing tests.
 
-It must not modify or relabel existing fixtures and must not implement
-production behavior. Until that evidence and the remaining owner decisions are
-closed, version-1 qualification remains a no-go.
+The following are **source facts** about current unversioned runtime behavior:
+
+- `Lizzo(loc)` constructs `DB(loc)`. `DB._scanLocation()` calls
+  `fs.existsSync(loc)`. When the supplied target is absent it calls
+  `fs.mkdirSync(loc)` without recursive creation and immediately saves root
+  state. When the target exists, the constructor adopts it without requiring
+  an ordinary directory, canonical root state, or an empty/non-empty
+  distinction.
+- Opening and creation are therefore conflated. An absent target can become a
+  database as a constructor side effect; an existing target is treated as the
+  opening location. There is no explicit semantic mode.
+- Current new-root creation neither creates intermediate directories nor
+  specifies recursive creation. A filesystem collision or creation error
+  propagates. Source contains no post-creation validation, rollback, removal,
+  rename, or cleanup path.
+- Root and child state, node data, node links, stored functions, collection
+  state, and collection item links use synchronous direct reads and writes.
+  `_loadFromDir()` uses `fs.readdirSync()` and raw string concatenation for
+  descendant candidates.
+- Production source does not call `lstat`, `stat`, `realpath`, `opendir`, or a
+  directory-handle API. It contains no `isSymbolicLink()` check and reads no
+  `dev`, `ino`, or `nlink` metadata.
+- The only production `path.resolve()` call compares an enumerated candidate
+  child location with locations of children already reconstructed through
+  constructors. It does not canonicalize the database root or establish
+  containment. Production source has no `path.relative()` or
+  separator-aware containment check.
+- Current constructors for root, node, and collection objects may create
+  missing locations. `_loadFromDir()` classifies and constructs entries before
+  complete-tree validation, so current reconstruction is not a read-only
+  preflight.
+
+Existing automated tests create uniquely named OS-temporary directories and
+clean up their own paths. They characterize current construction, reopen,
+failure propagation, and persisted preimages. They do not prove non-following
+metadata, native canonicalization, symlink or junction rejection, generic
+Windows reparse detection, device continuity, hard-link count, filesystem
+object identity, or separator-aware containment. Legacy `test.js` uses the
+current relative `./db/` constructor path and was inspected but not executed
+because doing so would create repository-local state.
+
+The following is an **inference** from those source facts: current
+`existsSync()` and direct path use cannot establish the filesystem identity and
+containment guarantees selected below. That inference is not a claim that a
+particular host path currently contains a link, reparse point, mount, or hard
+link.
+
+## 40. Selected separate filesystem modes
+
+David Giles selects two distinct future internal semantic modes. This record
+does not select their eventual public method names or exported shapes.
+
+### Open existing
+
+Future open-existing behavior requires:
+
+- the root already exists;
+- the root is an ordinary directory;
+- the root is not a symbolic link, junction, device namespace, or detectable
+  reparse point;
+- native filesystem resolution can establish one canonical absolute root;
+- no file or directory is created when the requested root is absent;
+- an absent root is an error;
+- an empty directory without a valid marked version-1 root state is not
+  initialized; and
+- opening never falls back to creation.
+
+The opening operation adopts no bytes until the root and root-state boundaries
+below pass. Existing files do not gain authority merely because the caller
+selected open-existing mode.
+
+### Create new
+
+Future create-new behavior requires:
+
+- the target root does not exist;
+- its immediate parent already exists;
+- that parent is an ordinary directory and satisfies the selected
+  non-link/non-junction/detectable-reparse requirements;
+- intermediate directories are not created;
+- only the final root directory is created, using one non-recursive directory
+  operation;
+- any existing target, including an empty directory, is a collision;
+- a collision between the absence check and creation fails rather than
+  adopting the winner's object;
+- the new root is inspected and canonicalized after creation;
+- the canonical new root is the immediate child of the canonical parent; and
+- creation never opens, initializes, or adopts pre-existing bytes.
+
+This slice does not select whether or how the one newly created directory may
+be rolled back after a later post-creation failure. Cleanup authority,
+recoverability, original-cause preservation, and final error behavior must be
+selected before implementation. No recursive deletion is implied.
+
+## 41. Selected root canonicalization sequence
+
+The future root boundary applies this order:
+
+1. Validate the selected primitive-string, absolute-native-local lexical
+   contract.
+2. Require the caller-selected semantic mode: open-existing or create-new.
+3. In open-existing mode, inspect the existing root using non-following
+   metadata. In create-new mode, confirm target absence and inspect the
+   already-existing immediate parent using non-following metadata.
+4. Reject an unsupported object type, symbolic link, junction, device
+   namespace, or detectable reparse condition.
+5. Use native filesystem `realpath` behavior on the existing root, or on the
+   existing parent before new-root creation.
+6. Establish one canonical absolute process-local root, or one canonical
+   absolute parent for creation.
+7. In create-new mode, perform only the final non-recursive directory
+   creation, then inspect and canonicalize the created directory.
+8. Require the canonical created root to be the immediate child of the
+   canonical parent.
+9. Never serialize the canonical root and never derive database or node
+   identity from it.
+
+Lexical normalization is not filesystem identity. String equality is not
+filesystem-object identity. String-prefix containment is prohibited.
+Drive-letter spelling, platform-returned case, and absolute-root presentation
+do not define a database or node identity.
+
+The prior lexical contract deliberately did not select exact normalization of
+separators, explicit `.` or `..` segments, trailing separators, drive-letter
+presentation, or platform-returned case. Those remain explicit implementation
+prerequisites. An implementation must resolve them consistently with the
+selected native canonicalization sequence and fail closed until it can do so;
+this record does not invent their normalization.
+
+Current constructors do not implement any step in this sequence beyond calling
+filesystem APIs with the supplied path and creating an absent target.
+
+## 42. Selected per-entry traversal and containment sequence
+
+For each direct child of an already accepted physical directory, a future
+read-only preflight must:
+
+1. Obtain the raw directory entry without constructing a runtime database,
+   node, collection, template, or proxy.
+2. Validate the raw entry against the exact selected version-1 physical-name
+   grammar before joining it to any path.
+3. Join exactly that one validated entry segment to the already-contained
+   physical parent location.
+4. Inspect the resulting entry with non-following metadata.
+5. Reject a symbolic link, junction, detectable reparse point, unsupported
+   object type, or a file/directory type that disagrees with the typed name.
+6. Resolve the entry's native real path only after those non-following checks.
+7. Compute the resolved entry's relationship to the canonical database root
+   using separator-aware relative-path semantics.
+8. Require a strict descendant: the relative result is non-empty, is not
+   absolute, and does not begin with a complete `..` path segment.
+9. Require the entry's filesystem device or volume identity to match the
+   selected root baseline.
+10. Apply the regular-file link-count and physical-object identity rules below.
+11. Record the canonical physical object identity before any descent.
+12. Recurse only after every entry-level check succeeds.
+
+Simple string-prefix comparison is never containment. Preflight must not
+follow a link first and then decide whether the resolved target appears to be
+inside the root. Persisted state supplies no path and cannot redirect any of
+these steps.
+
+This strict-descendant rule applies to every entry, including exact
+`_state.ms`. The canonical database root itself is the only accepted object
+that is not strictly beneath itself.
+
+## 43. Accepted filesystem object types
+
+The initial hardened filesystem contract admits only:
+
+- ordinary directories where the exact typed grammar requires a directory;
+  and
+- ordinary regular files where the exact typed grammar requires a file.
+
+The root must be an ordinary directory. The contract rejects symbolic links,
+junctions, detectable reparse-point-backed objects, sockets, FIFOs or pipes,
+block devices, character devices, and every other special, unsupported, or
+unknown object type.
+
+The fail-closed reparse rule intentionally means that a OneDrive placeholder
+or another provider-backed database object represented through a detectable
+reparse point may be rejected by an initial hardened implementation. This
+record does not assert that every OneDrive-managed path is a reparse point, and
+it does not touch or characterize any existing OneDrive object.
+
+## 44. Selected link, mount, and physical-object policy
+
+The future initial hardened contract selects:
+
+- no symbolic links anywhere in the candidate database tree;
+- no junctions anywhere in the candidate database tree;
+- no detectable reparse points anywhere in the candidate database tree;
+- no descendant device or volume crossing after the canonical root establishes
+  the allowed device or volume baseline;
+- exactly one filesystem link for every admitted regular file;
+- rejection of multiply linked regular files;
+- a traversal-wide set of canonical filesystem object identities; and
+- rejection when a `(device, object-or-inode)` identity repeats, whether the
+  repetition would represent a directory cycle or another physical alias.
+
+The implementation must establish equivalent reliable identity fields where a
+platform does not use POSIX device and inode terminology. It must not
+substitute a path string for object identity.
+
+Ordinary Node `lstat` behavior is not documented here as sufficient to detect
+every Windows reparse-point category. Generic reparse detection and reliable
+device/volume, object/inode, and link-count evidence are platform-capability
+gates. If the target platform cannot prove the required object type, identity,
+link count, device/volume, or reparse status, the hardened operation stops as
+unsupported. It must not silently weaken this contract.
+
+## 45. Deterministic traversal and peer-failure precedence
+
+The future preflight processes peers in deterministic
+canonical-relative-path order:
+
+- accepted physical names are canonical lowercase ASCII and sort bytewise;
+- a descendant comparison key is the sequence of its accepted physical path
+  components from the root, not the host's enumeration order;
+- invalid raw names reject without case conversion, normalization, rename, or
+  decoding repair;
+- invalid peer names use stable raw-name byte ordering when the platform can
+  expose those bytes; and
+- when stable raw-name byte ordering cannot be established, no cross-process
+  deterministic precedence claim is made for those invalid peers.
+
+Within that peer order, the semantic category order in section 13 controls.
+This contract does not change current ordinary load order and does not define a
+public error class, numeric code, message, or complete wire shape.
+
+## 46. Root-state physical read boundary
+
+After establishing the canonical root, future open-existing preflight must:
+
+1. locate exact `_state.ms` as a direct root entry;
+2. validate its reserved exact physical name;
+3. inspect it with non-following metadata;
+4. require an ordinary, single-link regular file;
+5. require its resolved object to be strictly contained beneath the canonical
+   root and on the root device or volume;
+6. record and de-duplicate its physical object identity;
+7. read and parse its framing and logical value; and
+8. validate the exact root marker before recursively accepting the remainder
+   of the candidate tree.
+
+Marker validation never bypasses physical checks on `_state.ms`. An
+unversioned, malformed, unknown-format, or unsupported-version root can fail
+before the rest of the tree is traversed. No constructor, proxy operation,
+write, evaluation, normalization, repair, or migration occurs at this
+boundary.
+
+For create-new mode, the first persisted root write remains a future writer
+decision. This record does not select an atomic create/write protocol and does
+not claim that merely creating the directory establishes a valid database.
+
+## 47. TOCTOU, platform capability, and security nonclaims
+
+The selected path and metadata checks describe a bounded observation, not a
+stable filesystem transaction:
+
+- an object can change between inspection, canonicalization, read, and later
+  use;
+- `realpath`, non-following metadata, device/inode-like identity, and link
+  count do not themselves lock an object;
+- no concurrent-writer safety is claimed;
+- no handle-relative or race-free traversal is claimed;
+- no atomic open/create or commit protocol is selected;
+- no crash recovery, journaling, or durability behavior is selected; and
+- filesystem permissions and external mutation remain outside this bounded
+  evidence.
+
+Omitting persisted `_loc`, canonical typed names, native canonicalization,
+strict containment, and fail-closed physical-object checks reduce selected
+authority and alias risks. They do not close time-of-check/time-of-use races.
+Production implementation remains blocked until required platform evidence is
+demonstrated and the later locking and concurrency contract is selected.
+
+No complete cross-platform portability, filesystem security qualification, or
+version-1 support claim follows from this documentation.
+
+## 48. Compatibility disposition, remaining deferrals, and no-go
+
+The selected filesystem policy is incompatible with current constructor and
+path behavior:
+
+- current code conflates absent-root creation with existing-root use;
+- current code does not canonicalize the root or inspect entries without
+  following;
+- current code does not enforce typed object categories, strict containment,
+  device continuity, single-link files, or unique physical objects;
+- every existing persisted fixture remains characterization evidence only;
+- provider-backed or OneDrive content represented as detectable reparse
+  objects may be rejected by a future hardened implementation;
+- no existing database is rewritten, adopted, repaired, or migrated; and
+- no best-effort traversal or compatibility fallback is authorized.
+
+The exact public open/create API names and shapes, rollback after failed
+new-root post-checks, stable error API, general numeric resource limits,
+platform-specific reparse evidence, handle-relative traversal, locking,
+concurrent writers, atomicity, journaling, recovery, durability, collection
+and binding qualification, executable-content policy, migration, repair,
+runtime implementation, package version, release, npm publication, adapter,
+and Thoth behavior remain deferred.
+
+The truthful disposition remains a **no-go for complete version-1
+qualification**. The filesystem policy is now selected, but it has no
+test-only platform capability evidence and no runtime implementation.
+Executable content, collection/binding scope, complete `_keys` correspondence,
+and the complete accepted state/data schema also remain unresolved.
+
+## 49. Next independently testable slice
+
+The next dependency-ordered slice is test-only platform-capability
+characterization. It must not change production source or claim that a host is
+qualified merely because a subset of probes succeeds.
+
+Using one uniquely named task-owned OS-temporary tree whose resolved path is
+verified outside the repository, that later slice should safely characterize,
+where the host exposes the capability:
+
+- ordinary existing-directory and regular-file non-following metadata;
+- an absent target versus an existing target;
+- one non-recursive final-directory creation and collision failure;
+- native `realpath` behavior;
+- following metadata versus non-following metadata;
+- symbolic-link evidence and, on Windows where safely permitted, junction and
+  generic reparse evidence;
+- regular-file hard-link count;
+- device or volume and object/inode identity stability;
+- separator-aware strict-descendant containment;
+- deterministic canonical-relative-path ordering; and
+- cleanup of only the exact task-owned temporary tree after its resolved path
+  is reverified.
+
+The characterization must fail closed or report an exact platform evidence
+gap if any required security category cannot be demonstrated. It must not skip
+a symlink, junction/reparse, device, object-identity, link-count, or ordering
+gap and then claim qualification. It must not touch unrelated or pre-existing
+temporary state, modify persisted fixtures, construct or load a Moxley
+database, select locking, or implement production traversal.
