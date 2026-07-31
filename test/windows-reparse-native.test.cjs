@@ -63,7 +63,7 @@ if (!IS_WORKER_MODE) {
 
 const REPOSITORY_ROOT = path.resolve(__dirname, '..');
 const NATIVE_SOURCE = path.join(
-  __dirname,
+  REPOSITORY_ROOT,
   'native',
   'windows-reparse-classifier.c',
 );
@@ -162,10 +162,11 @@ const REQUIRED_SDK_TOKENS = Object.freeze([
   'FILE_FLAG_BACKUP_SEMANTICS',
 ]);
 
-// Characterization only. This suite compiles and invokes a disposable native
-// test harness in task-owned OS-temporary storage. It does not import Moxley,
-// implement traversal, qualify a persisted format, or establish TOCTOU,
-// containment, locking, recovery, durability, or production-runtime safety.
+// Characterization only. This suite compiles the private production native
+// source into disposable variants in task-owned OS-temporary storage. It does
+// not import Moxley, implement traversal, qualify a persisted format, or
+// establish TOCTOU, containment, locking, recovery, durability, or
+// production-runtime safety.
 const receipt = {
   platform: process.platform,
   architecture: process.arch,
