@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// Disposable test-only Node-API characterization harness. This source is not
-// linked into Moxley production code and does not define a supported API.
+// Private production Node-API source for the Windows reparse classifier. It is
+// built only by the explicit operator tool, is not wired into Moxley runtime
+// traversal, and does not define a public or package-exported API.
 
 #define WIN32_LEAN_AND_MEAN
 #ifndef NAPI_VERSION
@@ -231,6 +232,8 @@ static napi_value classify_path(
   free(path_buffer);
   path_buffer = NULL;
 
+// Characterization-only fault injection. The production build driver never
+// defines MOXLEY_TEST_FORCE_ATTRIBUTE_QUERY_FAILURE.
 #ifdef MOXLEY_TEST_FORCE_ATTRIBUTE_QUERY_FAILURE
   query_succeeded = FALSE;
   query_error = ERROR_GEN_FAILURE;
