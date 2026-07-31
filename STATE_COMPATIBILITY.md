@@ -2,11 +2,11 @@
 
 Status: Marker separability, future node identity, derived runtime-location
 authority, root-input lexical rules, persisted-name grammar, filesystem
-canonicalization and containment policy, the Windows reparse-classification
-mechanism, and the future native build and private internal-loader contract are
-selected; test-only native characterization is recorded, but no production
-native implementation or traversal integration exists and complete version-1
-qualification remains a no-go.
+canonicalization and containment policy, and the Windows reparse-classification
+mechanism are selected. The private production native source, explicit build
+and clean tooling, and private one-shot loader are implemented and isolated;
+traversal integration remains absent and complete version-1 qualification
+remains a no-go.
 Date: 2026-07-31
 Historical behavior baseline: `518ab5ab58500a84246770e8ef0180856e127abd`
 Discriminator decision input baseline: `635a7c09bcca63c3abbb52d5c2fbbce4b87a9817`
@@ -21,6 +21,8 @@ Windows reparse decision input baseline:
 `9a33fca1ed185516b3c6433369a8279bb15cb9a9`
 Native build and internal-loader contract input baseline:
 `33822da91018be3ec8e2e8c76d4cf03036861473`
+Native build and clean implementation baseline:
+`939160031487b44c9255947051b363a1eede18bd`
 Decision authority: David Giles, sole owner of Moxley
 
 These repository baselines are evidence and decision inputs. None is a
@@ -1784,12 +1786,20 @@ behavior.
 
 ## 58. Native build and internal-loader authority and evidence labels
 
-**Currently implemented characterization:** PR #25 completed the test-only
-slice described in section 57 and was squash-merged as
-`33822da91018be3ec8e2e8c76d4cf03036861473`. The authoritative merge adds the
-disposable source `test/native/windows-reparse-classifier.c`, its same-file
-worker and test harness, and the test-script entry that runs the harness. It
-does not add production native or JavaScript source.
+**Currently implemented characterization:** PR #25 completed the original
+test-only native characterization and was squash-merged as
+`33822da91018be3ec8e2e8c76d4cf03036861473`. PR #26 selected the build and
+loader contract on the later authoritative baseline
+`b622dfc2f7de5dbe1d9062e3b4b01132209960c0`.
+
+**Currently implemented boundary:** PR #27 was reviewed at exact head
+`105710054dc6047e37d64ecc0b4ee417f39f453f` and squash-merged as
+`939160031487b44c9255947051b363a1eede18bd`. It promotes the characterized C
+source to `native/windows-reparse-classifier.c`, removes the test-only C path,
+adds the explicit build and clean drivers, and adds their isolated lifecycle
+tests. That authoritative merge has 60 passing tests, 14 tracked
+JavaScript/CJS/MJS files, one production C file, 19 persisted fixtures, three
+Markdown files, and two JSON manifests.
 
 **Currently implemented characterization:** The authority audit for this
 contract inspected complete `STATE_COMPATIBILITY.md`, complete `index.js`, both
@@ -1801,13 +1811,14 @@ tracked package layout. The merged baseline has 50 passing tests, 11 tracked
 JavaScript/CJS/MJS files, one test-only C file, 19 persisted fixtures, three
 Markdown files, and two JSON manifests.
 
-**Currently implemented characterization:** `index.js` remains the only
-production entry point. `test/native/windows-reparse-classifier.c` remains
-test-only. There is no production native source, internal loader, build or
-clean driver, `binding.gyp`, native dependency, package export, lifecycle
-build, or generated output. `build/Release` is already ignored. Package
-installation does not build a native addon. `npm test` builds only disposable
-test variants in a task-owned OS-temporary directory and removes them.
+**Currently implemented boundary:** `index.js` remains the only package entry
+point. The production C source, explicit build and clean drivers, and private
+loader now exist, but none is imported by `index.js` or exposed through a
+package export. There is still no `binding.gyp`, native dependency, lifecycle
+build, prebuild, downloader, or committed generated output. Package
+installation does not build a native addon. The explicit tests compile both
+characterization variants and one qualified production addon, use bounded
+children for genuine addon loading, and remove every generated path.
 
 The following labels govern every item in this contract:
 
@@ -1815,32 +1826,34 @@ The following labels govern every item in this contract:
   separately authorized implementation. It is not current behavior.
 - **Currently implemented characterization** is evidence present at the input
   baseline. It is not production qualification.
-- **Deferred implementation** identifies work that this documentation-only
-  slice does not perform.
+- **Currently implemented boundary** is repository code and isolated test
+  behavior present in the current slice. It is not traversal qualification.
+- **Deferred implementation** identifies work that the current bounded slices
+  do not perform.
 - **Explicit nonclaim** states a guarantee, threat model, runtime behavior, or
   distribution decision that this contract does not establish.
 
-**Explicit nonclaim:** Nothing in sections 58 through 72 changes current
-runtime behavior, authorizes production traversal, creates a build artifact,
-or qualifies complete Windows version-1 support. The continuing disposition is
-**no-go**.
+**Explicit nonclaim:** Nothing in sections 58 through 72 connects native
+classification to Moxley runtime behavior, authorizes production traversal,
+commits a build artifact, or qualifies complete Windows version-1 support. The
+continuing disposition is **no-go**.
 
-## 59. Ownership and exact future paths
+## 59. Ownership and exact private paths
 
-**Selected future contract:** The one authoritative production C source is:
+**Currently implemented boundary:** The one authoritative production C source
+is:
 
 ```text
 native/windows-reparse-classifier.c
 ```
 
-The later implementation must promote and adapt the characterized test source
-into that single production source. Production and test copies must not remain
-independently maintained. After promotion, native characterization tests must
-compile the production source, and the old test-only C source must be removed
-in the same separately authorized implementation. The production source
-remains original Moxley code under Apache-2.0.
+PR #27 promoted and adapted the characterized test source into that single
+production source. The characterization tests compile it for both the normal
+and characterization-only injected variants, and the old test-only C path is
+absent. The production source remains original Moxley code under Apache-2.0.
 
-**Selected future contract:** The exact future internal paths are:
+**Currently implemented boundary:** The exact private source and generated
+paths are:
 
 - production native source:
   `native/windows-reparse-classifier.c`;
@@ -1855,9 +1868,9 @@ remains original Moxley code under Apache-2.0.
 - generated exclusive build lock:
   `build/Release/.moxley-windows-reparse-build.lock`.
 
-**Deferred implementation:** None of those future paths is created by this
-contract. Source promotion, removal of the old test source, and every build,
-clean, loader, or test change require separate authorization.
+The four source paths exist. The generated binary, receipt, lock, and staging
+directory exist only during an explicit build/test lifecycle and remain
+ignored and absent after successful clean and test completion.
 
 **Explicit nonclaim:** Listing a path does not make it a package export,
 public API, installed artifact, published file, or currently supported runtime
@@ -1865,23 +1878,23 @@ component.
 
 ## 60. Dependency direction and visibility
 
-**Selected future contract:** The only permitted dependency direction is:
+**Currently implemented boundary:** The present and only permitted dependency
+direction is:
 
 ```text
-future hardened traversal
+future hardened traversal (not implemented)
   -> lib/internal/windows-reparse-classifier.cjs
     -> build/Release/moxley-windows-reparse.node
       -> Windows system APIs
 ```
 
-No reverse dependency is permitted. The first build/loader implementation
-slice must not import the loader from `index.js` and must not expose it. Only a
-later separately authorized hardened traversal component may depend on the
-internal loader. The loader may depend on the exact generated addon. The addon
-must not depend on Moxley JavaScript state, persisted formats, Thoth,
-Yggdrasil, or an adapter.
+No reverse dependency is present or permitted. `index.js` does not import or
+expose the loader. Only a later separately authorized hardened traversal
+component may depend on it. The loader depends only on the exact generated
+addon and receipt. The addon does not depend on Moxley JavaScript state,
+persisted formats, Thoth, Yggdrasil, or an adapter.
 
-**Selected future contract:** The loader and addon remain private
+**Currently implemented boundary:** The loader and addon remain private
 implementation details. No package export, documented public method,
 caller-accessible native API, or direct import by another package or repository
 is approved.
@@ -1889,12 +1902,13 @@ is approved.
 **Deferred implementation:** Traversal integration and any mapping from native
 classification to traversal behavior remain later slices.
 
-**Explicit nonclaim:** This dependency diagram does not claim that a hardened
-traversal, internal loader, generated addon, adapter, or Thoth consumer exists.
+**Explicit nonclaim:** This dependency diagram does not claim that hardened
+traversal, an adapter, or a Thoth consumer exists. The generated addon is local
+build output rather than a tracked or distributed artifact.
 
 ## 61. Explicit build and clean commands
 
-**Selected future contract:** The future package scripts are exactly:
+**Currently implemented boundary:** The package scripts are exactly:
 
 ```text
 npm run build:native:windows
@@ -1902,17 +1916,15 @@ npm run clean:native:windows
 ```
 
 They are explicit operator commands. Native building is prohibited from
-`install`, `preinstall`, `postinstall`, `prepare`, `prepublish`, `npm test`,
-ordinary `require("moxley-db")`, and loader invocation. No runtime or package
-command may download headers, compilers, SDKs, prebuilds, or binaries.
+`install`, `preinstall`, `postinstall`, `prepare`, `prepublish`, ordinary
+`require("moxley-db")`, and loader invocation. The isolated native lifecycle
+tests invoke the same explicit build driver and clean all output. No runtime or
+package command downloads headers, compilers, SDKs, prebuilds, or binaries.
 
-**Currently implemented characterization:** `package.json` has only the `test`
-script, has no lifecycle script, and has no production native build command.
-There is no `binding.gyp`, so package installation has no implicit repository
-addon build input.
-
-**Deferred implementation:** The two manifest scripts and their driver files
-are not added in this documentation-only slice.
+**Currently implemented boundary:** `package.json` contains the two explicit
+commands and the serial test command. It has no lifecycle script. There is no
+`binding.gyp`, so package installation has no implicit repository addon build
+input.
 
 **Explicit nonclaim:** The selected command names do not authorize install-time
 building, automatic repair, loader-triggered compilation, or any network
@@ -1920,9 +1932,9 @@ access.
 
 ## 62. Build mechanism and exact initial target
 
-**Selected future contract:** The build uses direct source-only MSVC
-compilation, consistent with the accepted PR #25 characterization. The future
-build driver must:
+**Currently implemented boundary:** The build uses direct source-only MSVC
+compilation, consistent with the accepted PR #25 characterization. The build
+driver:
 
 - support only `win32` / `x64`;
 - require the approved exact Node and Node-API boundary;
@@ -1944,7 +1956,7 @@ build driver must:
   staging directory and exact owned lock, while a failure at or after the first
   final promotion preserves final-output and lock evidence.
 
-**Selected future contract:** The initial exact qualified build target is
+**Currently implemented boundary:** The exact authenticated build target is
 Windows 11 Home 25H2 build `26200.8875`, `win32` / `x64`, fixed local NTFS,
 Node `v24.13.0`, modules ABI 137, Node runtime Node-API 10, and the stable
 Node-API version 8 addon surface. The accepted toolchain evidence is Visual
@@ -1959,23 +1971,22 @@ The accepted x64 `Kernel32.Lib` is 311,908 bytes with SHA-256
 eligibility boundary only. It is not automatic qualification. Every exact Node
 patch requires an exact build receipt and separate verification before use.
 
-**Currently implemented characterization:** PR #25 directly compiles normal
-and injected test-only variants with the exact approved local toolchain, loads
-them only in bounded same-file child workers, and removes every task-owned
-build and filesystem path. It does not build a production addon.
-
-**Deferred implementation:** Exact discovery mechanics, signing verification,
-the final staging-directory spelling, receipt production, promotion logic, and
-production build-driver errors remain implementation work constrained by this
-contract.
+**Currently implemented boundary:** The characterization suite directly
+compiles normal and injected variants from the production source. The explicit
+production driver never defines the characterization-only failure macro. It
+authenticates the exact host, signed compiler and linker, SDK declarations,
+five cached Node headers, `node.lib`, and `Kernel32.Lib` before a warning-free
+compile/link. It uses bounded subprocesses without shell interpolation and
+performs no download.
 
 **Explicit nonclaim:** Node-API ABI stability does not qualify another Node
 patch, toolchain, SDK, OS build, filesystem, architecture, or generated binary.
 
 ## 63. Collision failure, locking, staging, and promotion
 
-**Selected future contract:** Generation is collision-failing. A build must not
-overwrite or silently replace an existing final binary, receipt, or lock. If
+**Currently implemented boundary:** Generation is collision-failing. A build
+does not overwrite or silently replace an existing final binary, receipt, or
+lock. If
 either final output already exists, the build fails and instructs the operator
 to run the explicit clean command first. Concurrent builds are unsupported and
 must fail through exclusive creation of the exact lock file. An abandoned lock
@@ -1983,7 +1994,7 @@ is not automatically removed. The explicit clean command is the only approved
 recovery for an abandoned task-owned lock, and only after verifying that no
 build process is active. No retry loop or automatic recovery is approved.
 
-**Selected future contract:** The build sequence is exactly:
+**Currently implemented boundary:** The build sequence is exactly:
 
 1. Authenticate the platform, filesystem boundary, toolchain, SDK, Node
    inputs, production source, package-relative output paths, and output
@@ -1997,10 +2008,11 @@ build process is active. No retry loop or automatic recovery is approved.
 7. Produce and validate the canonical receipt in staging.
 8. Immediately before promotion, require both final output paths still to be
    absent.
-9. Promote the binary into its absent final destination using the selected
-   collision-failing rename primitive.
-10. Promote the receipt into its absent final destination using the selected
-    collision-failing rename primitive.
+9. Promote the binary into its absent final destination with a
+   collision-failing same-volume hard-link creation, then remove the staged
+   link.
+10. Promote the receipt by the same no-replace hard-link operation, then remove
+    the staged link.
 11. While the exclusive lock is still held:
     - reopen the final receipt;
     - require exact canonical bytes, schema, versions, paths, types, and
@@ -2015,53 +2027,56 @@ build process is active. No retry loop or automatic recovery is approved.
 14. Return build success without performing another acceptance check outside
     the lock.
 
-**Selected future contract:** No cooperating build or clean command may mutate
-generated state while step 11 executes. The lock is released only after final
+**Currently implemented boundary:** No cooperating build or clean command may
+mutate generated state while step 11 executes. The lock is released only after final
 acceptance and staging cleanup succeed. There is no post-unlock acceptance
 step. Build success is not reported before successful lock release. A
 lock-release failure means the command fails and reports the retained exact
 lock; it does not report successful completion.
 
-**Selected future contract:** Each promotion rename is individually atomic on
-the supported fixed local NTFS boundary and must fail rather than replace an
-existing destination. The binary/receipt pair is not transactionally atomic. A
-crash between promotions leaves an incomplete pair, which the loader must
-reject.
+**Currently implemented boundary:** Each final hard-link creation is an
+individual collision-failing no-replace operation on the supported fixed local
+NTFS boundary. The binary/receipt pair is not transactionally atomic. A crash
+between promotions leaves an incomplete pair, which the loader rejects.
 
-**Selected future contract — before the first final promotion:** For a handled
-failure after acquiring the lock but before step 9, the build removes only the
+**Currently implemented boundary — before the first final promotion:** For a
+handled failure after acquiring the lock but before step 9, the build removes only the
 exact authenticated staging directory if it was created, releases only the
 exact owned lock, leaves both final output paths absent, reports failure, and
 does not retry. If safe staging cleanup or lock release fails, it reports the
 retained exact path and fails without broadening cleanup.
 
-**Selected future contract — at or after the first final promotion:** For a
-handled failure at or after step 9, the build does not delete, overwrite,
+**Currently implemented boundary — at or after the first final promotion:**
+For a handled failure at or after step 9, the build does not delete, overwrite,
 replace, or roll back either final output; does not report build success;
 leaves the lock present as incomplete-build evidence; preserves any incomplete
 binary/receipt pair; and stops without retry. A later explicit clean command is
 required. Clean may remove the incomplete generated state and abandoned lock
 only after independently proving that no build process remains active.
 
-**Selected future contract — crash behavior:** A process crash may leave
+**Currently implemented boundary — crash behavior:** A process crash may leave
 staging, the lock, only the final binary, both final outputs without completed
 verification, or another incomplete subset of generated state. The loader
 rejects every missing, incomplete, invalid, or mismatched final pair. The
 explicit clean command is the only selected recovery. No rollback, automatic
 repair, stale-lock timeout, PID-reuse inference, retry, or resume is selected.
 
-**Deferred implementation:** The later implementation must select one exact
-contained staging path and a collision-failing Windows promotion primitive
-that satisfies this sequence. This document neither creates that staging path
-nor selects a retry mechanism.
+**Currently implemented boundary:** The build starts the deterministic
+package-root-derived Windows named-pipe lease before exclusively creating the
+exact canonical lock file. It then creates one random
+`.moxley-windows-reparse-stage-<32 lowercase hex>` directory directly under
+`build/Release`. Clean connects once to the exact pipe recorded by a strictly
+validated lock: a successful connection proves an active cooperating build;
+an absent pipe makes the validated lock abandoned evidence. Neither driver
+uses PID, age, staleness, wait, retry, or PID-reuse inference.
 
-**Explicit nonclaim:** The lock coordinates only the future cooperating build
+**Explicit nonclaim:** The lock coordinates only the cooperating build
 and clean drivers. It is not a database lock, a hostile-local-user defense, a
 transaction, or crash recovery.
 
 ## 64. Canonical generated receipt
 
-**Selected future contract:** The generated, ignored, nonauthoritative local
+**Currently implemented boundary:** The generated, ignored, nonauthoritative local
 receipt has this exact logical key set and key order:
 
 ```json
@@ -2100,9 +2115,10 @@ receipt has this exact logical key set and key order:
 ```
 
 The zero and empty values are type placeholders only. They are not authorized
-emitted values. The future builder must populate nonempty exact evidence.
+emitted values. The builder populates every placeholder with authenticated
+nonempty evidence.
 
-**Selected future contract:** Receipt bytes are strict UTF-8 without BOM, with
+**Currently implemented boundary:** Receipt bytes are strict UTF-8 without BOM, with
 one final LF, the exact key set and order above, no duplicate or additional
 keys, integers for byte lengths and versions, positive safe-integer byte
 lengths for emitted source/import-library/artifact evidence, lowercase
@@ -2110,7 +2126,7 @@ lengths for emitted source/import-library/artifact evidence, lowercase
 The receipt contains no timestamp, username, absolute path, environment
 variable, hostname, secret, or unrelated machine state.
 
-**Selected future contract:** The exact required Node-header set is
+**Currently implemented boundary:** The exact required Node-header set is
 `node_api.h`, `node_api_types.h`, `js_native_api.h`,
 `js_native_api_types.h`, and `node_version.h`. The headers-tree hash algorithm
 is:
@@ -2132,14 +2148,12 @@ a new `receiptVersion`. `nativeContractVersion` is independently versioned; any
 native wire or export-contract change requires a new
 `nativeContractVersion`.
 
-**Currently implemented characterization:** PR #25 requires the exact five
-local header names and validates the matching Node version and ABI macros. It
-separately authenticates the accepted `node.lib` and `Kernel32.Lib` byte
-lengths and hashes before disposable compilation. It does not hash the headers
-as a canonical tree and does not emit this production receipt.
-
-**Deferred implementation:** Receipt serialization, canonical validation, and
-the first populated receipt are deferred to the implementation slice.
+**Currently implemented boundary:** The build driver independently hashes the
+five-file header ledger, authenticates the accepted `node.lib` and
+`Kernel32.Lib` lengths and hashes, and emits the canonical populated receipt.
+The loader independently enforces the receipt framing, exact keys and order,
+versions, target, paths, types, bounds, fixed toolchain and import-library
+evidence, and running Node compatibility before reading and hashing the addon.
 
 **Explicit nonclaim:** The receipt is reproducibility and accidental-mismatch
 evidence. It is not signed provenance, a trust anchor, or protection against an
@@ -2147,18 +2161,18 @@ attacker who can replace both the binary and receipt.
 
 ## 65. Explicit clean behavior
 
-**Selected future contract:** The clean driver resolves every path from the
+**Currently implemented boundary:** The clean driver resolves every path from the
 Moxley package root, never from the current working directory. It may operate
 only on the exact generated binary, receipt, and lock paths from section 59. It
 may additionally remove only the exact authenticated staging directory created
 by the build driver.
 
-**Selected future contract:** Explicit clean is the only selected recovery for
+**Currently implemented boundary:** Explicit clean is the only selected recovery for
 post-promotion or crash-retained incomplete generated state and an abandoned
 lock. It is not invoked automatically by the build. It may remove that state
 only after independently proving that no build process remains active.
 
-**Selected future contract:** Before removal, clean must reject a symbolic
+**Currently implemented boundary:** Before removal, clean rejects a symbolic
 link, junction, detectable reparse point, unexpected filesystem type,
 containment mismatch, unauthenticated staging directory, or unknown staging
 entry. It must never recursively delete `build`, `build/Release`, the
@@ -2167,9 +2181,12 @@ the exact generated targets are not deletion authority. If clean cannot prove
 that a build process is inactive, it fails. It reports exactly what it removed
 and treats already-absent exact outputs as idempotent success.
 
-**Deferred implementation:** The active-build proof, exact staging
-authentication record, safe removal primitives, and stable clean-command
-output remain implementation details that must preserve these bounds.
+**Currently implemented boundary:** The canonical lock contains only its exact
+format/version, package-root repository key, deterministic pipe name, one
+relative staging name, and a lowercase random nonce. Clean strictly validates
+that record, the non-following metadata and identity of every approved target,
+the staging inventory, and post-removal absence. Its success output contains
+only ordinal repository-relative approved paths.
 
 **Explicit nonclaim:** Clean removes generated local build state only. It is
 not rollback of database state, package installation, runtime behavior, or a
@@ -2177,7 +2194,7 @@ published artifact.
 
 ## 66. Private synchronous loader contract
 
-**Selected future contract:** The one future private loader function is:
+**Currently implemented boundary:** The one private loader function is:
 
 ```js
 loadWindowsReparseClassifier()
@@ -2206,7 +2223,7 @@ field order:
 }
 ```
 
-**Selected future contract:** The loader must, in order:
+**Currently implemented boundary:** The loader, in order:
 
 1. Resolve all paths from its own package location, never `cwd`, environment
    expansion, or caller input.
@@ -2227,7 +2244,7 @@ field order:
     exactly the JavaScript wrapper function `classify`.
 12. Never build, clean, download, retry, or fall back.
 
-**Selected future contract:** On every wrapper call, the wrapper must:
+**Currently implemented boundary:** On every wrapper call, the wrapper:
 
 1. Invoke the cached native `classify` function exactly once.
 2. Receive the native result synchronously.
@@ -2236,7 +2253,7 @@ field order:
    validated fields.
 5. Never return the original native object.
 
-**Selected future contract:** An accepted result is an ordinary, non-null
+**Currently implemented boundary:** An accepted result is an ordinary, non-null
 object whose prototype is exactly `Object.prototype`, with exactly the five own
 enumerable string-keyed data properties shown above in that order. Arrays,
 primitives, proxies, additional or missing string keys, symbol keys, inherited
@@ -2251,7 +2268,7 @@ only from validated data descriptors, never by repeated property access. It
 must not spread, stringify, log, mutate, freeze, expose, or retain a malformed
 native object.
 
-**Selected future contract:** `outcome` must be a primitive string exactly
+**Currently implemented boundary:** `outcome` must be a primitive string exactly
 equal to `ordinary`, `reparse`, or `capability-gap`. Each of
 `fileAttributes`, `reparseTag`, `win32Error`, and `closeWin32Error` must be a
 JavaScript number that is finite, is an integer, and is between `0` and
@@ -2275,30 +2292,32 @@ nonzero tag, and `ERROR_INVALID_DATA`—therefore remains a valid
 `capability-gap`. Every field, shape, descriptor, or outcome-consistency
 mismatch is invalid native-result evidence.
 
-**Selected future contract:** For a valid native result, the wrapper creates a
+**Currently implemented boundary:** For a valid native result, the wrapper creates a
 new JavaScript object, copies only the five validated primitive values in the
 exact key order shown above, freezes the new object, and returns it
 synchronously. It does not return, freeze, mutate, or expose the native-owned
 object. A valid `capability-gap` result is returned as a valid classification
 result; mapping it to traversal behavior remains deferred.
 
-**Selected future contract:** Loading is one-shot per process. The first load
+**Currently implemented boundary:** Loading is one-shot per process. The first load
 success is cached. The first load failure is terminal for that process. No
 retry occurs after generated output changes; process restart is required for
 another load attempt. This prevents silent mid-process capability substitution.
 
-**Deferred implementation:** The validation policy, accepted shape,
-consistency rules, result-invalid code, and poisoned-state behavior are
-selected by this contract. The JavaScript code and tests that enforce them,
-loader caching, and traversal-specific result mapping remain deferred to
-separately authorized implementation.
+**Currently implemented boundary:** The private module exports only one frozen
+object containing `loadWindowsReparseClassifier`. It exports no raw native
+function, validator, cache, error class, path, receipt parser, artifact detail,
+or test hook. Isolated child processes verify the one-shot load cache, exact
+result copying, closed validation reasons, and permanent post-invalid-result
+poisoning. Traversal-specific result mapping remains deferred to a separately
+authorized implementation.
 
 **Explicit nonclaim:** Receipt verification followed by `require()` does not
 eliminate the filesystem race between verification and native loading.
 
 ## 67. Internal loader errors
 
-**Selected future contract:** The internal error name is
+**Currently implemented boundary:** The internal error name is
 `MoxleyNativeCapabilityError`. The stable private codes are:
 
 - `MOXLEY_NATIVE_PLATFORM_UNSUPPORTED`;
@@ -2309,14 +2328,24 @@ eliminate the filesystem race between verification and native loading.
 - `MOXLEY_NATIVE_EXPORT_INVALID`; and
 - `MOXLEY_NATIVE_RESULT_INVALID`.
 
-**Selected future contract:** The loader retains original filesystem, JSON,
-hashing, and `require` failures as `cause` where applicable. Stable messages do
+The selected stable private outer messages are, respectively:
+
+- `Native classifier is unsupported on this platform.`
+- `Native classifier artifact is missing.`
+- `Native classifier receipt is invalid.`
+- `Native classifier artifact integrity check failed.`
+- `Native classifier failed to load.`
+- `Native classifier export is invalid.`
+- `Native classifier returned invalid result evidence.`
+
+**Currently implemented boundary:** The loader retains original filesystem,
+JSON, hashing, and `require` failures as `cause` where applicable. Stable messages do
 not expose absolute build paths. A failure is never converted into JavaScript
 `lstat`, `realpath`, a permissive classification, or any other fallback. These
 codes are private implementation contracts, not public package API.
 
-**Selected future contract:** `MOXLEY_NATIVE_RESULT_INVALID` is used only when
-the successfully loaded native function returns malformed, inconsistent,
+**Currently implemented boundary:** `MOXLEY_NATIVE_RESULT_INVALID` is used only
+when the successfully loaded native function returns malformed, inconsistent,
 throwing, or otherwise invalid result evidence. Its stable message is
 `Native classifier returned invalid result evidence.` It contains no absolute
 path or raw native value. The error retains only a newly created bounded
@@ -2343,8 +2372,8 @@ retain the malformed object or an exception obtained from it, invoke arbitrary
 serialization, invoke getters, or include stack material from the returned
 value, host state, or environment data.
 
-**Selected future contract:** A successfully loaded classifier begins usable.
-A valid `ordinary`, `reparse`, or `capability-gap` result does not poison it.
+**Currently implemented boundary:** A successfully loaded classifier begins
+usable. A valid `ordinary`, `reparse`, or `capability-gap` result does not poison it.
 The first `MOXLEY_NATIVE_RESULT_INVALID` disposition permanently poisons the
 cached classifier for that process, and the malformed result is never returned.
 Subsequent wrapper calls do not invoke native code again and fail with the same
@@ -2361,25 +2390,29 @@ fail-closed and restart-required.
 Build-driver failures, including a busy lock or toolchain rejection, remain
 build-command concerns and are not loader error codes.
 
-**Explicit nonclaim:** Selecting internal names and codes does not expose them
-from `index.js`, promise stability to external callers, or implement an error
-class in this slice.
+**Explicit nonclaim:** Implementing the private names, codes, and error class
+does not expose them from `index.js` or promise stability to external callers.
+The error class remains private and unexported.
 
 ## 68. Loader bootstrapping and security boundary
 
-**Selected future contract:** The generated build directory is trusted local
-build output under the operator's filesystem permissions. The loader uses
+**Currently implemented boundary:** The generated build directory is trusted
+local build output under the operator's filesystem permissions. The loader uses
 package-relative resolution and receipt hashing to detect missing,
 incomplete, or accidentally mismatched output and rejects an incomplete
 binary/receipt pair.
 
-**Currently implemented characterization:** The addon cannot classify its own
-binary before it has been loaded. JavaScript `lstat` cannot prove absence of
-every generic Windows reparse category. PR #25 proves only bounded test-worker
-loading and classification on the accepted host.
+**Currently implemented boundary:** The loader validates the receipt before it
+reads or loads the addon, requires an ordinary non-symbolic-link receipt and
+artifact path, requires its non-following size to agree with the receipt before
+reading it, recomputes the artifact length and SHA-256, and loads only the
+package-relative final addon. Genuine addon loads occur in bounded children
+that exit before clean. The addon still cannot classify its own binary before
+it has been loaded, and JavaScript `lstat` cannot prove absence of every generic
+Windows reparse category.
 
-**Explicit nonclaim:** No production loader or production runtime behavior is
-implemented by this documentation-only contract.
+**Explicit nonclaim:** The private loader is not imported by the production
+entry point and implements no production traversal behavior.
 
 **Explicit nonclaim:** Receipt hashing and package-relative resolution do not
 defend against an attacker who can replace both the binary and receipt.
@@ -2390,18 +2423,18 @@ qualification is authorized by this contract.
 
 ## 69. Packaging and distribution
 
-**Selected future contract:** Generated `.node`, receipt, lock, and staging
-state remain ignored and uncommitted. No prebuilt binary, install-time
+**Currently implemented boundary:** Generated `.node`, receipt, lock, and
+staging state remain ignored and uncommitted. No prebuilt binary, install-time
 downloader, npm lifecycle build, `npm pack`, npm publication, release asset, or
 binary distribution is approved. Source-build distribution policy remains a
 later release decision. The first implementation is repository-development
 only on the exact qualified host.
 
-**Currently implemented characterization:** `build/Release` is ignored and
-absent. No generated output is tracked or present. The package remains
-`moxley-db@3.1.1`, Apache-2.0, with only `flatted` as a dependency and no
-package export map or engine declaration. No new npm publication decision has
-been made.
+**Currently implemented boundary:** `build/Release` is ignored and generated
+output is absent after the explicit lifecycle and tests. No generated output
+is tracked. The package remains `moxley-db@3.1.1`, Apache-2.0, with only
+`flatted` as a dependency and no package export map or engine declaration. No
+new npm publication decision has been made.
 
 **Deferred implementation:** Any source-distribution policy, prebuild,
 signature, release asset, package-file allowlist, engine declaration, package
@@ -2413,13 +2446,9 @@ state.
 
 ## 70. Explicitly deferred implementation and integration
 
-**Deferred implementation:** This documentation-only slice defers:
+**Deferred implementation:** The completed build/clean and private-loader
+slices still defer:
 
-- production C source promotion and removal of the old test-only source;
-- build and clean drivers;
-- loader code and loader tests;
-- manifest scripts;
-- `.gitignore` changes if any later prove necessary;
 - `index.js` changes or public exports;
 - traversal integration;
 - persisted-format loading;
@@ -2435,25 +2464,27 @@ state.
 - migration; and
 - npm publication.
 
-**Explicit nonclaim:** A selected future build/loader contract does not select
+**Explicit nonclaim:** The implemented build/loader boundaries do not select
 the complete accepted persisted schema, collection or executable-content
 policy, public open/create API, traversal error mapping, database locking,
 write protocol, recovery, durability, migration, adapter behavior, or Thoth
 behavior.
 
-## 71. Documentation-only delta and continuing qualification no-go
+## 71. Implemented private-loader delta and continuing qualification no-go
 
-**Currently implemented characterization:** This contract changes only
-`STATE_COMPATIBILITY.md`. It adds no test, production source, native source,
-manifest, lockfile, dependency, package version, fixture, binary, build output,
-or generated receipt. The authoritative baseline remains 50 tests, 11
-JavaScript/CJS/MJS files, one test-only C file, 19 persisted fixtures, three
-Markdown files, and two manifests.
+**Currently implemented boundary:** This private-loader slice changes exactly
+`package.json`, `STATE_COMPATIBILITY.md`,
+`lib/internal/windows-reparse-classifier.cjs`, and
+`test/windows-reparse-loader.test.cjs`. It adds exactly 14 top-level tests and
+brings the repository to 74 tests, 16 JavaScript/CJS/MJS files, one production
+C file, 19 byte-identical persisted fixtures, three Markdown files, and two
+manifests. It changes no dependency, lockfile, package version, license,
+production entry point, existing test file, native source, build/clean driver,
+fixture, or committed generated output.
 
-**Selected future contract:** Policy, current characterization evidence,
-deferred implementation, and nonclaims remain separate. A future implementer
-must satisfy every selected gate without citing this documentation as current
-enforcement.
+**Currently implemented boundary:** Policy, current characterization evidence,
+implemented enforcement, deferred integration, and nonclaims remain separate.
+The isolated loader tests do not qualify traversal or persisted-state loading.
 
 **Explicit nonclaim:** Complete Windows version-1 qualification remains
 **no-go**. This document does not claim TOCTOU resistance, hostile-local-user
@@ -2464,20 +2495,16 @@ runtime support.
 ## 72. Next independently testable boundary
 
 **Deferred implementation:** The next slice requires separate authorization
-and is limited to production-source promotion, the explicit build and clean
-drivers, the private loader, and their isolated tests. It must compile the one
-production source from the characterization tests and remove the old test-only
-C copy in the same slice.
+and is limited to a traversal-specific contract and characterization for exact
+native-result mapping and handle-relative safety. It must not be inferred from
+the private loader's valid `ordinary`, `reparse`, or `capability-gap` results.
 
-**Selected future contract:** That slice must still exclude `index.js`, public
-exports, production traversal integration, persisted-state loading, adapter
-behavior, and Thoth consumption. It must preserve explicit operator-only
-building, collision failure, exclusive locking, contained staging,
-no-replace promotion, canonical receipts, bounded clean behavior, one-shot
-loader caching, exact per-call native result validation, result poisoning,
-exact private errors, ignored generated output, and the continuing
-qualification no-go.
+**Selected future contract:** That later slice must define and isolate
+component-by-component traversal mapping, root and descendant handle-relative
+safety, error precedence, and the remaining TOCTOU boundary before any runtime
+integration is considered.
 
-**Explicit nonclaim:** Completion of that isolated implementation slice would
-not by itself authorize traversal, persisted-format acceptance, distribution,
-release, npm publication, or complete version-1 qualification.
+**Explicit nonclaim:** Completion of the build/clean and private-loader slices
+does not authorize `index.js` integration, persisted-format acceptance,
+adapter or Thoth behavior, distribution, release, npm publication, or complete
+version-1 qualification. The next boundary is not implemented here.
