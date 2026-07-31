@@ -1939,7 +1939,10 @@ build driver must:
 - never write intermediate output outside that staging directory;
 - load and probe the staged addon in a bounded child process before promotion;
   and
-- remove staging output on every failed build.
+- apply the phase-specific cleanup authority in section 63: a handled failure
+  before the first final promotion may remove only the exact authenticated
+  staging directory and exact owned lock, while a failure at or after the first
+  final promotion preserves final-output and lock evidence.
 
 **Selected future contract:** The initial exact qualified build target is
 Windows 11 Home 25H2 build `26200.8875`, `win32` / `x64`, fixed local NTFS,
@@ -1982,24 +1985,70 @@ build process is active. No retry loop or automatic recovery is approved.
 
 **Selected future contract:** The build sequence is exactly:
 
-1. Authenticate the platform, toolchain, SDK, Node inputs, source, and output
+1. Authenticate the platform, filesystem boundary, toolchain, SDK, Node
+   inputs, production source, package-relative output paths, and output
    containment.
-2. Acquire the exclusive build lock.
-3. Compile and link within the task-owned staging directory.
-4. Load and characterize the staged addon in a bounded child process.
-5. Produce and validate the canonical receipt in staging.
-6. Require both final output paths to be absent.
-7. Rename the binary into its final absent destination.
-8. Rename the receipt into its final absent destination.
-9. Remove staging and the lock.
-10. Reopen and verify both final outputs.
+2. Acquire the exclusive build lock through collision-failing creation.
+3. Require both final output paths to be absent.
+4. Create and authenticate one exact task-owned staging directory on the same
+   fixed local NTFS volume as the final output.
+5. Compile and link all intermediate output within staging.
+6. Load and characterize the staged addon in a bounded child process.
+7. Produce and validate the canonical receipt in staging.
+8. Immediately before promotion, require both final output paths still to be
+   absent.
+9. Promote the binary into its absent final destination using the selected
+   collision-failing rename primitive.
+10. Promote the receipt into its absent final destination using the selected
+    collision-failing rename primitive.
+11. While the exclusive lock is still held:
+    - reopen the final receipt;
+    - require exact canonical bytes, schema, versions, paths, types, and
+      framing;
+    - reopen the final binary;
+    - recompute its byte length and SHA-256;
+    - require an exact match to the final receipt;
+    - load and probe the final addon in a bounded child process; and
+    - require the exact native export and classification contract.
+12. Remove the authenticated staging directory.
+13. Release the exclusive build lock last.
+14. Return build success without performing another acceptance check outside
+    the lock.
+
+**Selected future contract:** No cooperating build or clean command may mutate
+generated state while step 11 executes. The lock is released only after final
+acceptance and staging cleanup succeed. There is no post-unlock acceptance
+step. Build success is not reported before successful lock release. A
+lock-release failure means the command fails and reports the retained exact
+lock; it does not report successful completion.
 
 **Selected future contract:** Each promotion rename is individually atomic on
 the supported fixed local NTFS boundary and must fail rather than replace an
 existing destination. The binary/receipt pair is not transactionally atomic. A
 crash between promotions leaves an incomplete pair, which the loader must
-reject. No rollback is selected. Explicit clean removes incomplete generated
-state.
+reject.
+
+**Selected future contract — before the first final promotion:** For a handled
+failure after acquiring the lock but before step 9, the build removes only the
+exact authenticated staging directory if it was created, releases only the
+exact owned lock, leaves both final output paths absent, reports failure, and
+does not retry. If safe staging cleanup or lock release fails, it reports the
+retained exact path and fails without broadening cleanup.
+
+**Selected future contract — at or after the first final promotion:** For a
+handled failure at or after step 9, the build does not delete, overwrite,
+replace, or roll back either final output; does not report build success;
+leaves the lock present as incomplete-build evidence; preserves any incomplete
+binary/receipt pair; and stops without retry. A later explicit clean command is
+required. Clean may remove the incomplete generated state and abandoned lock
+only after independently proving that no build process remains active.
+
+**Selected future contract — crash behavior:** A process crash may leave
+staging, the lock, only the final binary, both final outputs without completed
+verification, or another incomplete subset of generated state. The loader
+rejects every missing, incomplete, invalid, or mismatched final pair. The
+explicit clean command is the only selected recovery. No rollback, automatic
+repair, stale-lock timeout, PID-reuse inference, retry, or resume is selected.
 
 **Deferred implementation:** The later implementation must select one exact
 contained staging path and a collision-failing Windows promotion primitive
@@ -2104,6 +2153,11 @@ only on the exact generated binary, receipt, and lock paths from section 59. It
 may additionally remove only the exact authenticated staging directory created
 by the build driver.
 
+**Selected future contract:** Explicit clean is the only selected recovery for
+post-promotion or crash-retained incomplete generated state and an abandoned
+lock. It is not invoked automatically by the build. It may remove that state
+only after independently proving that no build process remains active.
+
 **Selected future contract:** Before removal, clean must reject a symbolic
 link, junction, detectable reparse point, unexpected filesystem type,
 containment mismatch, unauthenticated staging directory, or unknown staging
@@ -2130,7 +2184,7 @@ loadWindowsReparseClassifier()
 ```
 
 It is synchronous, takes no arguments, and returns one frozen internal object
-containing exactly:
+containing exactly one JavaScript wrapper function:
 
 ```js
 {
@@ -2138,15 +2192,17 @@ containing exactly:
 }
 ```
 
-The native `classify(path)` result remains exactly:
+The wrapper is named `classify`; it does not expose the cached raw native
+function directly. The accepted native `classify(path)` result has exactly this
+field order:
 
 ```js
 {
-  outcome: "ordinary" | "reparse" | "capability-gap",
-  fileAttributes: uint32,
-  reparseTag: uint32,
-  win32Error: uint32,
-  closeWin32Error: uint32
+  outcome,
+  fileAttributes,
+  reparseTag,
+  win32Error,
+  closeWin32Error
 }
 ```
 
@@ -2167,17 +2223,75 @@ The native `classify(path)` result remains exactly:
 9. Load only the exact generated binary path.
 10. Require the addon export object to contain exactly one function-valued own
     export named `classify`.
-11. Return a frozen wrapper containing exactly `classify`.
+11. Cache that native function privately and return a frozen object containing
+    exactly the JavaScript wrapper function `classify`.
 12. Never build, clean, download, retry, or fall back.
 
-**Selected future contract:** Loading is one-shot per process. The first
-success is cached. The first failure is terminal for that process. No retry
-occurs after generated output changes; process restart is required for another
-attempt. This prevents silent mid-process capability substitution.
+**Selected future contract:** On every wrapper call, the wrapper must:
 
-**Deferred implementation:** Loader code, native wire validation, caching,
-tests, and traversal-specific result mapping are deferred to separately
-authorized implementation.
+1. Invoke the cached native `classify` function exactly once.
+2. Receive the native result synchronously.
+3. Validate the result before returning it.
+4. Return a newly frozen accepted result object containing only the five
+   validated fields.
+5. Never return the original native object.
+
+**Selected future contract:** An accepted result is an ordinary, non-null
+object whose prototype is exactly `Object.prototype`, with exactly the five own
+enumerable string-keyed data properties shown above in that order. Arrays,
+primitives, proxies, additional or missing string keys, symbol keys, inherited
+contract fields, accessors, getters, setters, non-enumerable contract fields,
+and unexpected prototypes are invalid. Inspection that throws, including any
+own-key, prototype, or descriptor operation, is invalid.
+
+The implementation must reject a proxy using the selected Node `util.types`
+proxy check, obtain the complete own-key list once, and obtain each property
+descriptor once through non-invoking reflection. It reads accepted field values
+only from validated data descriptors, never by repeated property access. It
+must not spread, stringify, log, mutate, freeze, expose, or retain a malformed
+native object.
+
+**Selected future contract:** `outcome` must be a primitive string exactly
+equal to `ordinary`, `reparse`, or `capability-gap`. Each of
+`fileAttributes`, `reparseTag`, `win32Error`, and `closeWin32Error` must be a
+JavaScript number that is finite, is an integer, and is between `0` and
+`0xffffffff`, inclusive. Numeric coercion is prohibited.
+
+Consistency validation uses
+`FILE_ATTRIBUTE_REPARSE_POINT === 0x00000400`:
+
+- `ordinary` is accepted only when the reparse attribute is absent,
+  `reparseTag === 0`, `win32Error === 0`, and `closeWin32Error === 0`;
+- `reparse` is accepted only when the reparse attribute is present,
+  `win32Error === 0`, and `closeWin32Error === 0`; a nonzero tag is not required
+  for every reparse category, and the selected policy rejects the reparse
+  attribute regardless of tag; and
+- `capability-gap` is accepted only when `win32Error !== 0` or
+  `closeWin32Error !== 0`; it is never interpreted as ordinary or reparse
+  acceptance.
+
+The current native contradictory-evidence result—reparse attribute absent,
+nonzero tag, and `ERROR_INVALID_DATA`—therefore remains a valid
+`capability-gap`. Every field, shape, descriptor, or outcome-consistency
+mismatch is invalid native-result evidence.
+
+**Selected future contract:** For a valid native result, the wrapper creates a
+new JavaScript object, copies only the five validated primitive values in the
+exact key order shown above, freezes the new object, and returns it
+synchronously. It does not return, freeze, mutate, or expose the native-owned
+object. A valid `capability-gap` result is returned as a valid classification
+result; mapping it to traversal behavior remains deferred.
+
+**Selected future contract:** Loading is one-shot per process. The first load
+success is cached. The first load failure is terminal for that process. No
+retry occurs after generated output changes; process restart is required for
+another load attempt. This prevents silent mid-process capability substitution.
+
+**Deferred implementation:** The validation policy, accepted shape,
+consistency rules, result-invalid code, and poisoned-state behavior are
+selected by this contract. The JavaScript code and tests that enforce them,
+loader caching, and traversal-specific result mapping remain deferred to
+separately authorized implementation.
 
 **Explicit nonclaim:** Receipt verification followed by `require()` does not
 eliminate the filesystem race between verification and native loading.
@@ -2191,14 +2305,57 @@ eliminate the filesystem race between verification and native loading.
 - `MOXLEY_NATIVE_ARTIFACT_MISSING`;
 - `MOXLEY_NATIVE_RECEIPT_INVALID`;
 - `MOXLEY_NATIVE_INTEGRITY_MISMATCH`;
-- `MOXLEY_NATIVE_LOAD_FAILED`; and
-- `MOXLEY_NATIVE_EXPORT_INVALID`.
+- `MOXLEY_NATIVE_LOAD_FAILED`;
+- `MOXLEY_NATIVE_EXPORT_INVALID`; and
+- `MOXLEY_NATIVE_RESULT_INVALID`.
 
 **Selected future contract:** The loader retains original filesystem, JSON,
 hashing, and `require` failures as `cause` where applicable. Stable messages do
 not expose absolute build paths. A failure is never converted into JavaScript
 `lstat`, `realpath`, a permissive classification, or any other fallback. These
 codes are private implementation contracts, not public package API.
+
+**Selected future contract:** `MOXLEY_NATIVE_RESULT_INVALID` is used only when
+the successfully loaded native function returns malformed, inconsistent,
+throwing, or otherwise invalid result evidence. Its stable message is
+`Native classifier returned invalid result evidence.` It contains no absolute
+path or raw native value. The error retains only a newly created bounded
+internal `TypeError` cause whose message is exactly one of this closed causal
+validation-reason vocabulary:
+
+- `RESULT_NOT_OBJECT`;
+- `RESULT_KEY_SET_INVALID`;
+- `RESULT_DESCRIPTOR_INVALID`;
+- `RESULT_FIELD_INVALID`;
+- `RESULT_OUTCOME_INCONSISTENT`; or
+- `RESULT_INSPECTION_FAILED`.
+
+These reason identifiers are causal diagnostics, not additional public loader
+codes. `RESULT_NOT_OBJECT` covers null, a primitive, an array, a proxy, or an
+unexpected prototype. `RESULT_KEY_SET_INVALID` covers any own-key count, kind,
+order, or identity mismatch. `RESULT_DESCRIPTOR_INVALID` covers a missing,
+non-enumerable, or accessor descriptor. `RESULT_FIELD_INVALID` covers an
+invalid outcome value or numeric field. `RESULT_OUTCOME_INCONSISTENT` covers a
+field combination that violates the selected outcome rules. Any exception from
+the selected result-inspection operations is discarded and replaced with the
+bounded `RESULT_INSPECTION_FAILED` cause. The error and poisoned state do not
+retain the malformed object or an exception obtained from it, invoke arbitrary
+serialization, invoke getters, or include stack material from the returned
+value, host state, or environment data.
+
+**Selected future contract:** A successfully loaded classifier begins usable.
+A valid `ordinary`, `reparse`, or `capability-gap` result does not poison it.
+The first `MOXLEY_NATIVE_RESULT_INVALID` disposition permanently poisons the
+cached classifier for that process, and the malformed result is never returned.
+Subsequent wrapper calls do not invoke native code again and fail with the same
+stable private code, message, and bounded causal reason. Process restart is
+required before another load attempt. There is no retry, reload, artifact
+replacement, JavaScript fallback, or self-repair.
+
+Loader-load failure caching and post-load result poisoning are separate states.
+The former prevents another load after a terminal load failure; the latter
+prevents another native call after invalid native-result evidence. Both are
+fail-closed and restart-required.
 
 **Deferred implementation:** Traversal-specific mapping remains deferred.
 Build-driver failures, including a busy lock or toolchain rejection, remain
@@ -2220,6 +2377,9 @@ binary/receipt pair.
 binary before it has been loaded. JavaScript `lstat` cannot prove absence of
 every generic Windows reparse category. PR #25 proves only bounded test-worker
 loading and classification on the accepted host.
+
+**Explicit nonclaim:** No production loader or production runtime behavior is
+implemented by this documentation-only contract.
 
 **Explicit nonclaim:** Receipt hashing and package-relative resolution do not
 defend against an attacker who can replace both the binary and receipt.
@@ -2314,8 +2474,9 @@ exports, production traversal integration, persisted-state loading, adapter
 behavior, and Thoth consumption. It must preserve explicit operator-only
 building, collision failure, exclusive locking, contained staging,
 no-replace promotion, canonical receipts, bounded clean behavior, one-shot
-loader caching, exact private errors, ignored generated output, and the
-continuing qualification no-go.
+loader caching, exact per-call native result validation, result poisoning,
+exact private errors, ignored generated output, and the continuing
+qualification no-go.
 
 **Explicit nonclaim:** Completion of that isolated implementation slice would
 not by itself authorize traversal, persisted-format acceptance, distribution,
