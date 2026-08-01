@@ -1855,12 +1855,16 @@ const internal = Object.freeze({
 module.exports = Object.freeze({
   internal,
   __test: Object.freeze({
+    MAX_PROCESS_OUTPUT_BYTES,
+    PROCESS_TIMEOUT_MS,
     authenticateBuildInputs,
     createReceipt,
     decodeReceiptBytes,
     exercisePromotionScenario,
+    requireProcessSuccess,
     repositoryLeaseIdentity,
     runBuild,
+    runProcess,
     validateReceipt,
   }),
 });
