@@ -4,7 +4,7 @@
   "description": "A flexible class based database system for complicated schemas",
   "main": "index.js",
   "scripts": {
-    "test": "node --test test/load-readiness.test.cjs test/repeated-load-mutation.test.cjs test/duplicate-create.test.cjs test/restart-load-create.test.cjs test/child-state-preimage.test.cjs test/filesystem-capabilities.test.cjs test/windows-reparse-native.test.cjs test/windows-native-build.test.cjs",
+    "test": "node --test test/load-readiness.test.cjs test/repeated-load-mutation.test.cjs test/duplicate-create.test.cjs test/restart-load-create.test.cjs test/child-state-preimage.test.cjs test/filesystem-capabilities.test.cjs test/windows-reparse-native.test.cjs test/windows-native-build.test.cjs test/windows-native-subprocess.test.cjs",
     "build:native:windows": "node scripts/build-windows-native.cjs",
     "clean:native:windows": "node scripts/clean-windows-native.cjs"
   },
