@@ -2,12 +2,14 @@
 
 Status: Marker separability, future node identity, derived runtime-location
 authority, root-input lexical rules, persisted-name grammar, filesystem
-canonicalization and containment policy, the Windows reparse-classification
-mechanism, and the future native build and private internal-loader contract are
-selected; test-only native characterization is recorded, but no production
-native implementation or traversal integration exists and complete version-1
+canonicalization and containment policy, and the Windows reparse-classification
+mechanism are selected. The private production native source and explicit build
+and clean tooling are implemented and isolated. Native subprocess-supervision
+gaps are characterized and a repair contract is selected, but that policy is
+not implemented. The private loader remains blocked in an unchanged draft pull
+request; traversal integration remains absent and complete version-1
 qualification remains a no-go.
-Date: 2026-07-31
+Date: 2026-08-01
 Historical behavior baseline: `518ab5ab58500a84246770e8ef0180856e127abd`
 Discriminator decision input baseline: `635a7c09bcca63c3abbb52d5c2fbbce4b87a9817`
 Persisted-evidence inventory baseline: `3368824d8ab58d6ce8a5964b2acb8c846823430e`
@@ -21,6 +23,12 @@ Windows reparse decision input baseline:
 `9a33fca1ed185516b3c6433369a8279bb15cb9a9`
 Native build and internal-loader contract input baseline:
 `33822da91018be3ec8e2e8c76d4cf03036861473`
+Native build and clean implementation baseline:
+`939160031487b44c9255947051b363a1eede18bd`
+Native subprocess-characterization baseline:
+`092a215bf37fc82d2ba71ea4f466d5d8fb63547d`
+Blocked private-loader candidate head, not merged into authoritative `master`:
+`c019e83b21784135c5b171a5f104b2b96418ab07`
 Decision authority: David Giles, sole owner of Moxley
 
 These repository baselines are evidence and decision inputs. None is a
@@ -1476,6 +1484,15 @@ implemented or build-characterized. Executable content, collection/binding
 scope, complete `_keys` correspondence, and the complete accepted state/data
 schema also remain unresolved.
 
+**Historical implementation-state note (2026-08-01):** The implementation,
+file-layout, build, and next-slice statements in sections 48 through 57 record
+the repository at the Windows reparse decision input baseline
+`9a33fca1ed185516b3c6433369a8279bb15cb9a9`, before PR #25, PR #27, and PR #29.
+They are retained as decision history rather than current-state claims. The
+current implementation and verification boundaries are in sections 58 through
+83. Earlier policy decisions and the complete qualification no-go continue
+unless a later section explicitly supersedes them.
+
 ## 49. Completed platform-capability characterization
 
 The Windows reparse decision input baseline includes the merged test-only
@@ -1784,30 +1801,39 @@ behavior.
 
 ## 58. Native build and internal-loader authority and evidence labels
 
-**Currently implemented characterization:** PR #25 completed the test-only
-slice described in section 57 and was squash-merged as
-`33822da91018be3ec8e2e8c76d4cf03036861473`. The authoritative merge adds the
-disposable source `test/native/windows-reparse-classifier.c`, its same-file
-worker and test harness, and the test-script entry that runs the harness. It
-does not add production native or JavaScript source.
+**Historical characterization:** PR #25 completed the original test-only
+native characterization and was squash-merged as
+`33822da91018be3ec8e2e8c76d4cf03036861473`. PR #26 selected the build and
+loader contract on the later authoritative baseline
+`b622dfc2f7de5dbe1d9062e3b4b01132209960c0`.
 
-**Currently implemented characterization:** The authority audit for this
-contract inspected complete `STATE_COMPATIBILITY.md`, complete `index.js`, both
-manifests, `.gitignore`, `.gitattributes`, the merged native C source and test
-harness, every current test and worker relevant to filesystem behavior, all 19
-persisted fixtures, the Apache-2.0 license and ownership/notice records, the
-merged PRs and first-parent history from #12 through #25, and the complete
-tracked package layout. The merged baseline has 50 passing tests, 11 tracked
-JavaScript/CJS/MJS files, one test-only C file, 19 persisted fixtures, three
+**Currently implemented boundary:** PR #27 was reviewed at exact head
+`105710054dc6047e37d64ecc0b4ee417f39f453f` and squash-merged as
+`939160031487b44c9255947051b363a1eede18bd`. It promotes the characterized C
+source to `native/windows-reparse-classifier.c`, removes the test-only C path,
+adds the explicit build and clean drivers, and adds their isolated lifecycle
+tests. That authoritative merge has 60 passing tests, 14 tracked
+JavaScript/CJS/MJS files, one production C file, 19 persisted fixtures, three
 Markdown files, and two JSON manifests.
 
-**Currently implemented characterization:** `index.js` remains the only
-production entry point. `test/native/windows-reparse-classifier.c` remains
-test-only. There is no production native source, internal loader, build or
-clean driver, `binding.gyp`, native dependency, package export, lifecycle
-build, or generated output. `build/Release` is already ignored. Package
-installation does not build a native addon. `npm test` builds only disposable
-test variants in a task-owned OS-temporary directory and removes them.
+**Historical characterization:** The PR #26 authority audit inspected complete
+`STATE_COMPATIBILITY.md`, complete `index.js`, both manifests, `.gitignore`,
+`.gitattributes`, the then-merged native C source and test harness, every then-
+current test and worker relevant to filesystem behavior, all 19 persisted
+fixtures, the Apache-2.0 license and ownership/notice records, merged PRs and
+first-parent history from #12 through #25, and the complete tracked package
+layout. Its input baseline had 50 passing tests, 11 tracked JavaScript/CJS/MJS
+files, one test-only C file, 19 persisted fixtures, three Markdown files, and
+two JSON manifests. Those counts are retained as history, not current state.
+
+**Currently implemented boundary:** `index.js` remains the only package entry
+point. The production C source and explicit build and clean drivers exist, but
+none is imported by `index.js` or exposed through a package export. There is no
+internal loader on authoritative `master`, `binding.gyp`, native dependency,
+lifecycle build, prebuild, downloader, or committed generated output. Package
+installation does not build a native addon. The explicit tests compile the
+characterization variants and an authenticated production addon, use bounded
+children for genuine addon loading, and remove every generated path.
 
 The following labels govern every item in this contract:
 
@@ -1815,39 +1841,41 @@ The following labels govern every item in this contract:
   separately authorized implementation. It is not current behavior.
 - **Currently implemented characterization** is evidence present at the input
   baseline. It is not production qualification.
-- **Deferred implementation** identifies work that this documentation-only
-  slice does not perform.
+- **Historical characterization** is evidence retained from an earlier
+  repository state and is not a claim about current files or behavior.
+- **Currently implemented boundary** is repository code and isolated test
+  behavior present on authoritative `master`. It is not traversal
+  qualification.
+- **Deferred implementation** identifies work that the current bounded slices
+  do not perform.
 - **Explicit nonclaim** states a guarantee, threat model, runtime behavior, or
   distribution decision that this contract does not establish.
 
-**Explicit nonclaim:** Nothing in sections 58 through 72 changes current
-runtime behavior, authorizes production traversal, creates a build artifact,
-or qualifies complete Windows version-1 support. The continuing disposition is
-**no-go**.
+**Explicit nonclaim:** Nothing in sections 58 through 72 connects native
+classification to Moxley runtime behavior, authorizes production traversal,
+commits a build artifact, or qualifies complete Windows version-1 support. The
+continuing disposition is **no-go**.
 
-## 59. Ownership and exact future paths
+## 59. Ownership and exact private paths
 
-**Selected future contract:** The one authoritative production C source is:
+**Currently implemented boundary:** The one authoritative production C source
+is:
 
 ```text
 native/windows-reparse-classifier.c
 ```
 
-The later implementation must promote and adapt the characterized test source
-into that single production source. Production and test copies must not remain
-independently maintained. After promotion, native characterization tests must
-compile the production source, and the old test-only C source must be removed
-in the same separately authorized implementation. The production source
-remains original Moxley code under Apache-2.0.
+PR #27 promoted and adapted the characterized test source into that single
+production source. The characterization tests compile it for both normal and
+characterization-only injected variants, and the old test-only C path is
+absent. The production source remains original Moxley code under Apache-2.0.
 
-**Selected future contract:** The exact future internal paths are:
+**Currently implemented boundary:** The exact build and generated paths are:
 
 - production native source:
   `native/windows-reparse-classifier.c`;
 - explicit build driver: `scripts/build-windows-native.cjs`;
 - explicit clean driver: `scripts/clean-windows-native.cjs`;
-- private internal loader:
-  `lib/internal/windows-reparse-classifier.cjs`;
 - generated binary:
   `build/Release/moxley-windows-reparse.node`;
 - generated receipt:
@@ -1855,9 +1883,15 @@ remains original Moxley code under Apache-2.0.
 - generated exclusive build lock:
   `build/Release/.moxley-windows-reparse-build.lock`.
 
-**Deferred implementation:** None of those future paths is created by this
-contract. Source promotion, removal of the old test source, and every build,
-clean, loader, or test change require separate authorization.
+The three source paths exist. Only an explicit build or isolated test lifecycle
+creates the generated binary, receipt, lock, or staging directory. They remain
+ignored and untracked; successful clean and test completion leave them absent,
+while bounded failure and crash policies can preserve them as evidence.
+
+**Selected future contract:** The exact private loader path remains
+`lib/internal/windows-reparse-classifier.cjs`. It exists only on blocked draft
+PR #28 at head `c019e83b21784135c5b171a5f104b2b96418ab07`; it is absent from
+authoritative `master` and is not implemented by this document.
 
 **Explicit nonclaim:** Listing a path does not make it a package export,
 public API, installed artifact, published file, or currently supported runtime
@@ -1889,12 +1923,14 @@ is approved.
 **Deferred implementation:** Traversal integration and any mapping from native
 classification to traversal behavior remain later slices.
 
-**Explicit nonclaim:** This dependency diagram does not claim that a hardened
-traversal, internal loader, generated addon, adapter, or Thoth consumer exists.
+**Explicit nonclaim:** This dependency diagram does not claim that hardened
+traversal, an internal loader on authoritative `master`, an adapter, or a Thoth
+consumer exists. The generated addon is local build output rather than a
+tracked or distributed artifact.
 
 ## 61. Explicit build and clean commands
 
-**Selected future contract:** The future package scripts are exactly:
+**Currently implemented boundary:** The package scripts are exactly:
 
 ```text
 npm run build:native:windows
@@ -1902,17 +1938,15 @@ npm run clean:native:windows
 ```
 
 They are explicit operator commands. Native building is prohibited from
-`install`, `preinstall`, `postinstall`, `prepare`, `prepublish`, `npm test`,
-ordinary `require("moxley-db")`, and loader invocation. No runtime or package
-command may download headers, compilers, SDKs, prebuilds, or binaries.
+`install`, `preinstall`, `postinstall`, `prepare`, `prepublish`, ordinary
+`require("moxley-db")`, and loader invocation. The isolated native lifecycle
+tests invoke the same explicit build driver and clean all output. No runtime or
+package command downloads headers, compilers, SDKs, prebuilds, or binaries.
 
-**Currently implemented characterization:** `package.json` has only the `test`
-script, has no lifecycle script, and has no production native build command.
-There is no `binding.gyp`, so package installation has no implicit repository
-addon build input.
-
-**Deferred implementation:** The two manifest scripts and their driver files
-are not added in this documentation-only slice.
+**Currently implemented boundary:** `package.json` contains the two explicit
+commands and the serial test command. It has no lifecycle script. There is no
+`binding.gyp`, so package installation has no implicit repository addon build
+input.
 
 **Explicit nonclaim:** The selected command names do not authorize install-time
 building, automatic repair, loader-triggered compilation, or any network
@@ -1920,31 +1954,31 @@ access.
 
 ## 62. Build mechanism and exact initial target
 
-**Selected future contract:** The build uses direct source-only MSVC
-compilation, consistent with the accepted PR #25 characterization. The future
-build driver must:
+**Currently implemented boundary:** The build uses direct source-only MSVC
+compilation, consistent with the accepted PR #25 characterization. The build
+driver:
 
-- support only `win32` / `x64`;
-- require the approved exact Node and Node-API boundary;
-- locate a complete, launchable, signed MSVC x64 toolchain;
-- locate the selected Windows SDK;
-- locate exact local Node headers and the matching AMD64 `node.lib`;
-- authenticate required files and versions before compilation;
-- use no `node-gyp`, Python, CMake, `node-addon-api`, V8, Node internal C++ API,
+- supports only `win32` / `x64`;
+- requires the approved exact Node and Node-API boundary;
+- locates a complete, launchable, signed MSVC x64 toolchain;
+- locates the selected Windows SDK;
+- locates exact local Node headers and the matching AMD64 `node.lib`;
+- authenticates required files and versions before compilation;
+- uses no `node-gyp`, Python, CMake, `node-addon-api`, V8, Node internal C++ API,
   or direct libuv;
-- perform no networking;
-- compile with warnings as errors and the characterized compiler and linker
+- performs no networking;
+- compiles with warnings as errors and the characterized compiler and linker
   hardening flags;
-- build all intermediate output in one exact task-owned staging directory;
-- never write intermediate output outside that staging directory;
-- load and probe the staged addon in a bounded child process before promotion;
+- builds all intermediate output in one exact task-owned staging directory;
+- never writes intermediate output outside that staging directory;
+- loads and probes the staged addon in a bounded child process before promotion;
   and
-- apply the phase-specific cleanup authority in section 63: a handled failure
+- applies the phase-specific cleanup authority in section 63: a handled failure
   before the first final promotion may remove only the exact authenticated
   staging directory and exact owned lock, while a failure at or after the first
   final promotion preserves final-output and lock evidence.
 
-**Selected future contract:** The initial exact qualified build target is
+**Currently implemented boundary:** The exact authenticated build target is
 Windows 11 Home 25H2 build `26200.8875`, `win32` / `x64`, fixed local NTFS,
 Node `v24.13.0`, modules ABI 137, Node runtime Node-API 10, and the stable
 Node-API version 8 addon surface. The accepted toolchain evidence is Visual
@@ -1959,31 +1993,30 @@ The accepted x64 `Kernel32.Lib` is 311,908 bytes with SHA-256
 eligibility boundary only. It is not automatic qualification. Every exact Node
 patch requires an exact build receipt and separate verification before use.
 
-**Currently implemented characterization:** PR #25 directly compiles normal
-and injected test-only variants with the exact approved local toolchain, loads
-them only in bounded same-file child workers, and removes every task-owned
-build and filesystem path. It does not build a production addon.
-
-**Deferred implementation:** Exact discovery mechanics, signing verification,
-the final staging-directory spelling, receipt production, promotion logic, and
-production build-driver errors remain implementation work constrained by this
-contract.
+**Currently implemented boundary:** The characterization suite directly
+compiles normal and injected variants from the production source. The explicit
+production driver never defines the characterization-only failure macro. It
+authenticates the exact host, signed compiler and linker, SDK declarations,
+five cached Node headers, `node.lib`, and `Kernel32.Lib` before a warning-free
+compile/link. It uses bounded subprocesses without shell interpolation and
+performs no download.
 
 **Explicit nonclaim:** Node-API ABI stability does not qualify another Node
 patch, toolchain, SDK, OS build, filesystem, architecture, or generated binary.
 
 ## 63. Collision failure, locking, staging, and promotion
 
-**Selected future contract:** Generation is collision-failing. A build must not
-overwrite or silently replace an existing final binary, receipt, or lock. If
-either final output already exists, the build fails and instructs the operator
-to run the explicit clean command first. Concurrent builds are unsupported and
-must fail through exclusive creation of the exact lock file. An abandoned lock
-is not automatically removed. The explicit clean command is the only approved
-recovery for an abandoned task-owned lock, and only after verifying that no
-build process is active. No retry loop or automatic recovery is approved.
+**Currently implemented boundary:** Generation is collision-failing. A build
+does not overwrite or silently replace an existing final binary, receipt, or
+lock. If either final output already exists, the build fails and instructs the
+operator to run the explicit clean command first. Concurrent builds are
+unsupported and fail through exclusive creation of the exact lock file. An
+abandoned lock is not automatically removed. The explicit clean command is the
+only approved recovery for an abandoned task-owned lock, subject to the
+stronger termination-unconfirmed policy in section 80. No retry loop or
+automatic recovery is approved.
 
-**Selected future contract:** The build sequence is exactly:
+**Currently implemented boundary:** The build sequence is exactly:
 
 1. Authenticate the platform, filesystem boundary, toolchain, SDK, Node
    inputs, production source, package-relative output paths, and output
@@ -1997,10 +2030,11 @@ build process is active. No retry loop or automatic recovery is approved.
 7. Produce and validate the canonical receipt in staging.
 8. Immediately before promotion, require both final output paths still to be
    absent.
-9. Promote the binary into its absent final destination using the selected
-   collision-failing rename primitive.
-10. Promote the receipt into its absent final destination using the selected
-    collision-failing rename primitive.
+9. Promote the binary into its absent final destination with a
+   collision-failing same-volume hard-link creation, then remove the staged
+   link.
+10. Promote the receipt by the same no-replace hard-link operation, then remove
+    the staged link.
 11. While the exclusive lock is still held:
     - reopen the final receipt;
     - require exact canonical bytes, schema, versions, paths, types, and
@@ -2012,57 +2046,65 @@ build process is active. No retry loop or automatic recovery is approved.
     - require the exact native export and classification contract.
 12. Remove the authenticated staging directory.
 13. Release the exclusive build lock last.
-14. Return build success without performing another acceptance check outside
+14. Close the named-pipe lease.
+15. Return build success without performing another acceptance check outside
     the lock.
 
-**Selected future contract:** No cooperating build or clean command may mutate
-generated state while step 11 executes. The lock is released only after final
-acceptance and staging cleanup succeed. There is no post-unlock acceptance
-step. Build success is not reported before successful lock release. A
-lock-release failure means the command fails and reports the retained exact
-lock; it does not report successful completion.
+**Currently implemented boundary:** No cooperating build or clean command may
+mutate generated state while step 11 executes. The lock is released only after
+final acceptance and staging cleanup succeed. There is no post-unlock
+acceptance step. Build success is not reported before successful lock release.
+A lock-release or lease-close failure means the command fails; it does not
+report successful completion.
 
-**Selected future contract:** Each promotion rename is individually atomic on
-the supported fixed local NTFS boundary and must fail rather than replace an
-existing destination. The binary/receipt pair is not transactionally atomic. A
-crash between promotions leaves an incomplete pair, which the loader must
-reject.
+**Currently implemented boundary:** Each final hard-link creation is an
+individual collision-failing no-replace operation on the supported fixed local
+NTFS boundary. The binary/receipt pair is not transactionally atomic. A crash
+between promotions leaves an incomplete pair, which the selected future loader
+must reject.
 
-**Selected future contract — before the first final promotion:** For a handled
-failure after acquiring the lock but before step 9, the build removes only the
-exact authenticated staging directory if it was created, releases only the
+**Currently implemented boundary — before the first final promotion:** For a
+handled failure after acquiring the lock but before step 9, the build removes
+only the exact authenticated staging directory if it was created, releases only the
 exact owned lock, leaves both final output paths absent, reports failure, and
 does not retry. If safe staging cleanup or lock release fails, it reports the
-retained exact path and fails without broadening cleanup.
+cleanup failure and fails without broadening cleanup.
 
-**Selected future contract — at or after the first final promotion:** For a
-handled failure at or after step 9, the build does not delete, overwrite,
+**Currently implemented boundary — at or after the first final promotion:**
+For a handled failure at or after step 9, the build does not delete, overwrite,
 replace, or roll back either final output; does not report build success;
 leaves the lock present as incomplete-build evidence; preserves any incomplete
 binary/receipt pair; and stops without retry. A later explicit clean command is
-required. Clean may remove the incomplete generated state and abandoned lock
-only after independently proving that no build process remains active.
+required. The current clean command uses the deterministic lease pipe as its
+cooperating-build activity evidence. Section 80 selects stronger evidence and
+preservation requirements after termination-unconfirmed.
 
-**Selected future contract — crash behavior:** A process crash may leave
+**Currently implemented boundary — crash behavior:** A process crash may leave
 staging, the lock, only the final binary, both final outputs without completed
-verification, or another incomplete subset of generated state. The loader
-rejects every missing, incomplete, invalid, or mismatched final pair. The
-explicit clean command is the only selected recovery. No rollback, automatic
-repair, stale-lock timeout, PID-reuse inference, retry, or resume is selected.
+verification, or another incomplete subset of generated state. The selected
+future loader must reject every missing, incomplete, invalid, or mismatched
+final pair. The explicit clean command is the only selected recovery, subject
+to section 80. No rollback, automatic repair, stale-lock timeout, PID-reuse
+inference, retry, or resume is selected.
 
-**Deferred implementation:** The later implementation must select one exact
-contained staging path and a collision-failing Windows promotion primitive
-that satisfies this sequence. This document neither creates that staging path
-nor selects a retry mechanism.
+**Currently implemented boundary:** The build starts the deterministic
+package-root-derived Windows named-pipe lease before exclusively creating the
+exact canonical lock file. It then creates one random
+`.moxley-windows-reparse-stage-<32 lowercase hex>` directory directly under
+`build/Release`. Clean connects once to the exact pipe recorded by a strictly
+validated lock: a successful connection is current cooperating-build evidence;
+an absent pipe makes the validated lock abandoned evidence under the current
+implementation. Neither driver uses PID, age, staleness, wait, retry, or
+PID-reuse inference.
 
-**Explicit nonclaim:** The lock coordinates only the future cooperating build
-and clean drivers. It is not a database lock, a hostile-local-user defense, a
+**Explicit nonclaim:** The lock coordinates only the cooperating build and
+clean drivers. It is not a database lock, a hostile-local-user defense, a
 transaction, or crash recovery.
 
 ## 64. Canonical generated receipt
 
-**Selected future contract:** The generated, ignored, nonauthoritative local
-receipt has this exact logical key set and key order:
+**Currently implemented boundary:** The generated, ignored, nonauthoritative
+local receipt has this exact logical key set and key order:
 
 ```json
 {
@@ -2100,17 +2142,18 @@ receipt has this exact logical key set and key order:
 ```
 
 The zero and empty values are type placeholders only. They are not authorized
-emitted values. The future builder must populate nonempty exact evidence.
+emitted values. The builder populates every placeholder with authenticated
+nonempty evidence.
 
-**Selected future contract:** Receipt bytes are strict UTF-8 without BOM, with
-one final LF, the exact key set and order above, no duplicate or additional
+**Currently implemented boundary:** Receipt bytes are strict UTF-8 without
+BOM, with one final LF, the exact key set and order above, no duplicate or additional
 keys, integers for byte lengths and versions, positive safe-integer byte
 lengths for emitted source/import-library/artifact evidence, lowercase
 64-character SHA-256 strings, and forward-slash repository-relative paths.
 The receipt contains no timestamp, username, absolute path, environment
 variable, hostname, secret, or unrelated machine state.
 
-**Selected future contract:** The exact required Node-header set is
+**Currently implemented boundary:** The exact required Node-header set is
 `node_api.h`, `node_api_types.h`, `js_native_api.h`,
 `js_native_api_types.h`, and `node_version.h`. The headers-tree hash algorithm
 is:
@@ -2132,14 +2175,11 @@ a new `receiptVersion`. `nativeContractVersion` is independently versioned; any
 native wire or export-contract change requires a new
 `nativeContractVersion`.
 
-**Currently implemented characterization:** PR #25 requires the exact five
-local header names and validates the matching Node version and ABI macros. It
-separately authenticates the accepted `node.lib` and `Kernel32.Lib` byte
-lengths and hashes before disposable compilation. It does not hash the headers
-as a canonical tree and does not emit this production receipt.
-
-**Deferred implementation:** Receipt serialization, canonical validation, and
-the first populated receipt are deferred to the implementation slice.
+**Currently implemented boundary:** The build driver hashes the five-file
+header ledger, authenticates the accepted `node.lib` and `Kernel32.Lib` lengths
+and hashes, and emits the canonical populated receipt. Receipt verification by
+the blocked private-loader candidate is not implemented on authoritative
+`master`.
 
 **Explicit nonclaim:** The receipt is reproducibility and accidental-mismatch
 evidence. It is not signed provenance, a trust anchor, or protection against an
@@ -2147,29 +2187,36 @@ attacker who can replace both the binary and receipt.
 
 ## 65. Explicit clean behavior
 
-**Selected future contract:** The clean driver resolves every path from the
-Moxley package root, never from the current working directory. It may operate
+**Currently implemented boundary:** The clean driver resolves every path from
+the Moxley package root, never from the current working directory. It may operate
 only on the exact generated binary, receipt, and lock paths from section 59. It
 may additionally remove only the exact authenticated staging directory created
 by the build driver.
 
-**Selected future contract:** Explicit clean is the only selected recovery for
-post-promotion or crash-retained incomplete generated state and an abandoned
-lock. It is not invoked automatically by the build. It may remove that state
-only after independently proving that no build process remains active.
+**Currently implemented boundary:** Explicit clean is the only selected
+recovery for post-promotion or crash-retained incomplete generated state and an
+abandoned lock. It is not invoked automatically by the build.
 
-**Selected future contract:** Before removal, clean must reject a symbolic
+**Selected future contract:** The stronger termination-unconfirmed limits in
+section 80 apply before clean may remove state after that disposition.
+
+**Currently implemented boundary:** Before removal, clean rejects a symbolic
 link, junction, detectable reparse point, unexpected filesystem type,
 containment mismatch, unauthenticated staging directory, or unknown staging
 entry. It must never recursively delete `build`, `build/Release`, the
 repository, a home directory, or an unresolved path. Unrelated entries outside
-the exact generated targets are not deletion authority. If clean cannot prove
-that a build process is inactive, it fails. It reports exactly what it removed
-and treats already-absent exact outputs as idempotent success.
+the exact generated targets are not deletion authority. The current clean
+fails when its one-time lease connection finds an active cooperating build; an
+absent pipe permits it to continue to path authentication. That check is not
+independent process-tree proof. Clean reports exactly what it removed and
+treats already-absent exact outputs as idempotent success.
 
-**Deferred implementation:** The active-build proof, exact staging
-authentication record, safe removal primitives, and stable clean-command
-output remain implementation details that must preserve these bounds.
+**Currently implemented boundary:** The canonical lock contains only its exact
+format/version, package-root repository key, deterministic pipe name, one
+relative staging name, and a lowercase random nonce. Clean strictly validates
+that record, the non-following metadata and identity of every approved target,
+the staging inventory, and post-removal absence. Its success output contains
+only ordinal repository-relative approved paths.
 
 **Explicit nonclaim:** Clean removes generated local build state only. It is
 not rollback of database state, package installation, runtime behavior, or a
@@ -2390,18 +2437,18 @@ qualification is authorized by this contract.
 
 ## 69. Packaging and distribution
 
-**Selected future contract:** Generated `.node`, receipt, lock, and staging
-state remain ignored and uncommitted. No prebuilt binary, install-time
+**Currently implemented boundary:** Generated `.node`, receipt, lock, and
+staging state remain ignored and uncommitted. No prebuilt binary, install-time
 downloader, npm lifecycle build, `npm pack`, npm publication, release asset, or
 binary distribution is approved. Source-build distribution policy remains a
 later release decision. The first implementation is repository-development
 only on the exact qualified host.
 
-**Currently implemented characterization:** `build/Release` is ignored and
-absent. No generated output is tracked or present. The package remains
-`moxley-db@3.1.1`, Apache-2.0, with only `flatted` as a dependency and no
-package export map or engine declaration. No new npm publication decision has
-been made.
+**Currently implemented boundary:** `build/Release` is ignored and generated
+output is absent after the explicit lifecycle and tests. No generated output
+is tracked. The package remains `moxley-db@3.1.1`, Apache-2.0, with only
+`flatted` as a dependency and no package export map or engine declaration. No
+new npm publication decision has been made.
 
 **Deferred implementation:** Any source-distribution policy, prebuild,
 signature, release asset, package-file allowlist, engine declaration, package
@@ -2413,13 +2460,11 @@ state.
 
 ## 70. Explicitly deferred implementation and integration
 
-**Deferred implementation:** This documentation-only slice defers:
+**Deferred implementation:** The completed build/clean slice and this
+documentation-only subprocess-policy slice still defer:
 
-- production C source promotion and removal of the old test-only source;
-- build and clean drivers;
 - loader code and loader tests;
-- manifest scripts;
-- `.gitignore` changes if any later prove necessary;
+- repaired subprocess-supervision code and tests;
 - `index.js` changes or public exports;
 - traversal integration;
 - persisted-format loading;
@@ -2435,25 +2480,26 @@ state.
 - migration; and
 - npm publication.
 
-**Explicit nonclaim:** A selected future build/loader contract does not select
-the complete accepted persisted schema, collection or executable-content
+**Explicit nonclaim:** The implemented build/clean boundary and selected future
+loader and supervision contracts do not select the complete accepted persisted
+schema, collection or executable-content
 policy, public open/create API, traversal error mapping, database locking,
 write protocol, recovery, durability, migration, adapter behavior, or Thoth
 behavior.
 
 ## 71. Documentation-only delta and continuing qualification no-go
 
-**Currently implemented characterization:** This contract changes only
+**Currently implemented boundary:** This contract changes only
 `STATE_COMPATIBILITY.md`. It adds no test, production source, native source,
 manifest, lockfile, dependency, package version, fixture, binary, build output,
-or generated receipt. The authoritative baseline remains 50 tests, 11
-JavaScript/CJS/MJS files, one test-only C file, 19 persisted fixtures, three
+or generated receipt. The authoritative baseline is 66 tests, 15 tracked
+JavaScript/CJS/MJS files, one production C file, 19 persisted fixtures, three
 Markdown files, and two manifests.
 
 **Selected future contract:** Policy, current characterization evidence,
-deferred implementation, and nonclaims remain separate. A future implementer
-must satisfy every selected gate without citing this documentation as current
-enforcement.
+implemented boundaries, deferred implementation, and nonclaims remain
+separate. A future implementer must satisfy every selected gate without citing
+this documentation as current enforcement.
 
 **Explicit nonclaim:** Complete Windows version-1 qualification remains
 **no-go**. This document does not claim TOCTOU resistance, hostile-local-user
@@ -2463,21 +2509,457 @@ runtime support.
 
 ## 72. Next independently testable boundary
 
-**Deferred implementation:** The next slice requires separate authorization
-and is limited to production-source promotion, the explicit build and clean
-drivers, the private loader, and their isolated tests. It must compile the one
-production source from the characterization tests and remove the old test-only
-C copy in the same slice.
+**Deferred implementation:** After this documentation pull request is reviewed
+and merged, the next isolated implementation slice may update only
+`scripts/build-windows-native.cjs`,
+`test/windows-native-subprocess.test.cjs`, and
+`test/windows-native-build.test.cjs`. It must implement the selected state
+machine in sections 76 through 81 and repair all six negative characterization
+tests without touching PR #28.
 
-**Selected future contract:** That slice must still exclude `index.js`, public
-exports, production traversal integration, persisted-state loading, adapter
-behavior, and Thoth consumption. It must preserve explicit operator-only
-building, collision failure, exclusive locking, contained staging,
-no-replace promotion, canonical receipts, bounded clean behavior, one-shot
-loader caching, exact per-call native result validation, result poisoning,
-exact private errors, ignored generated output, and the continuing
-qualification no-go.
+**Selected future contract:** Only after that repair is independently reviewed
+and merged may PR #28 be rebased and its loader harness amended to consume the
+repaired supervision behavior. Until then PR #28 remains unchanged, draft,
+open, and unmerged at head `c019e83b21784135c5b171a5f104b2b96418ab07`.
 
-**Explicit nonclaim:** Completion of that isolated implementation slice would
-not by itself authorize traversal, persisted-format acceptance, distribution,
-release, npm publication, or complete version-1 qualification.
+**Explicit nonclaim:** Completion of the supervision repair would not by itself
+authorize traversal, persisted-format acceptance, distribution, release, npm
+publication, or complete version-1 qualification.
+
+## 73. Native subprocess-supervision authority and evidence labels
+
+**Currently implemented boundary:** PR #29 was reviewed at exact head
+`9eb2d1e91a4826b7233ca7692e273201ea721558`, which was exactly one commit based
+directly on `939160031487b44c9255947051b363a1eede18bd`, and was squash-merged as
+`092a215bf37fc82d2ba71ea4f466d5d8fb63547d` with merge-commit subject
+`Characterize native subprocess supervision gaps (#29)`. It changes exactly
+`package.json`, `scripts/build-windows-native.cjs`, and
+`test/windows-native-subprocess.test.cjs`.
+
+**Currently implemented boundary:** PR #29 changes no production subprocess,
+timeout, output-limit, authentication-command, process-termination, error-
+mapping, build, lock, promotion, receipt, or cleanup behavior. It adds only the
+test-script entry, the new characterization test file, and these four existing
+helpers/constants to the frozen private `__test` surface:
+
+- `MAX_PROCESS_OUTPUT_BYTES`;
+- `PROCESS_TIMEOUT_MS`;
+- `requireProcessSuccess`; and
+- `runProcess`.
+
+**Currently implemented characterization:** The six top-level PR #29 tests are
+a negative-characterization slice. The ordinary zero-exit case is the control
+that preserves accepted success evidence; the remaining cases expose current
+failure collapse and settlement gaps. Every worker and descendant is created
+by the test task and has a finite natural lifetime. No test claims to reproduce
+PR #28's historical failure.
+
+**Authority audit:** This policy audit inspected complete
+`STATE_COMPATIBILITY.md`, the complete build and clean drivers, the native-build
+lifecycle tests, the merged subprocess-characterization tests, the complete
+private-loader candidate and harness from PR #28 without changing them, and PR
+#27 through PR #29 history and descriptions. It also inspected the primary
+Node.js and Microsoft sources recorded in section 75. Authoritative `master`
+contains 66 tests, 15 tracked JavaScript/CJS/MJS files, one production C file,
+19 persisted fixtures, three Markdown files, and two manifests.
+
+**Blocked candidate evidence:** PR #28 remains unchanged, open, draft, and
+unmerged at head `c019e83b21784135c5b171a5f104b2b96418ab07` on branch
+`codex/moxley-private-native-loader`. Its author-controlled title,
+body, commits, file list and contents, and head contents remain unchanged. Its
+reviews, comments, threads, requested reviewers, checks, and labels also remain
+unchanged. Its hosted `CONFLICTING` / `DIRTY` recalculation after PR #29 is
+expected evidence from the shared `package.json` line, not authority to resolve,
+rebase, or amend it.
+
+## 74. Observed subprocess facts, inference, ambiguity, and nonclaims
+
+**Observed fact:** The merged characterization proves that ordinary zero-exit
+evidence is retained as code `0`, signal `null`, and bounded stdout and stderr.
+It also proves that nonzero exit, spawn failure, timeout, stdout overflow, and
+stderr overflow currently collapse into
+`MOXLEY_NATIVE_BUILD_SUBPROCESS_FAILED`.
+
+**Observed fact:** On timeout the current supervisor invokes `child.kill()`
+only on the direct child. Timeout and output overflow do not settle the promise
+at their trigger; settlement waits for `close`. An inherited output handle can
+therefore make settlement substantially exceed the nominal timeout. In the
+task-owned inherited-pipe test, a 3,000 ms timeout settled between approximately
+8.5 and 14.3 seconds while the descendant had an 8,000 ms natural lifetime.
+The merged PR record preserves exact samples of 9,487.316 ms and 14,278.677 ms.
+
+**Document-supported inference:** Node.js documents that multiple processes
+can share child stdio and that `close` follows stream closure. Microsoft
+documents that pipe EOF requires every inherited write handle to close. Those
+facts are consistent with the task-owned descendant delaying the observed
+`close`; they do not provide a timing guarantee or establish the cause of any
+other failure.
+
+**Historical fact:** PR #28's archived loader-suite run failed in its shared
+build hook after approximately 25.6 seconds with only the generic bounded-
+subprocess code and message; no command or causal disposition was retained.
+All 14 tests failed through that one hook. A direct build immediately afterward
+succeeded in approximately 15.8 seconds, explicit clean succeeded, and the
+loader suite then passed 14/14. Later isolated read-only authentication
+succeeded at approximately 12.4 seconds and, sequentially, approximately 21.5
+and 23.9 seconds.
+
+**Inference:** The selected 90-second authentication bound supplies headroom
+over the observed 23.9-second sample. The current 30-second authentication
+allowance has limited observed headroom.
+
+**Ambiguity and explicit nonclaim:** The historical PR #28 failure cause is
+unestablished. PR #29 neither reproduces nor explains it, and the observations
+do not prove that the current 30-second allowance caused it. The historical
+failure must not be described as a compiler, authentication, timeout, output,
+spawn, exit, signal, or termination failure without new causal evidence.
+
+## 75. Primary subprocess and Windows process-source record
+
+The following direct URLs were read on 2026-08-01. Statements labeled
+documented fact are paraphrases of those primary sources. Later sections label
+Moxley policy separately.
+
+**Documented Node.js facts:**
+
+- [`child_process.spawn()`](https://nodejs.org/api/child_process.html#child_processspawncommand-args-options)
+  accepts an executable and argument array and defaults `shell` to `false`.
+- The [`error` event](https://nodejs.org/api/child_process.html#event-error)
+  can report spawn, signal-delivery, IPC-send, or abort failure, and an `exit`
+  event may or may not follow it. Node warns consumers to guard against
+  accidentally invoking handler functions multiple times.
+- The [`exit` event](https://nodejs.org/api/child_process.html#event-exit)
+  reports an exit code or terminating signal, while stdio can remain open. The
+  [`close` event](https://nodejs.org/api/child_process.html#event-close) occurs
+  after the process ends and its stdio closes; Node notes that multiple
+  processes can share those streams.
+- [`subprocess.kill()`](https://nodejs.org/api/child_process.html#subprocesskillsignal)
+  sends a signal. A successful send does not establish termination, and Node
+  warns that PID reuse can make a later signal address another process.
+  [`subprocess.killed`](https://nodejs.org/api/child_process.html#subprocesskilled)
+  records successful signal delivery, not confirmed termination.
+
+**Document-supported inference:** A Moxley supervisor must prevent duplicate
+settlement. Because Node documents several meanings for `error`, only an error
+before successful spawn can establish `SUBPROCESS_SPAWN_ERROR`; a post-spawn
+error is lifecycle evidence rather than proof of spawn failure.
+
+**Documented Microsoft facts:**
+
+- [`taskkill`](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/taskkill)
+  documents `/PID` as selecting a process identifier, `/T` as ending the
+  selected process and child processes started by it, and `/F` as forced
+  termination.
+- [Process Handles and Identifiers](https://learn.microsoft.com/en-us/windows/win32/procthread/process-handles-and-identifiers)
+  documents that a process identifier identifies a process only until that
+  process terminates and that a process handle remains valid until closed,
+  including after termination.
+- [`PROCESS_INFORMATION`](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/ns-processthreadsapi-process_information#members)
+  documents that a process identifier may be reused after the process object
+  is freed and all handles are closed.
+- [`TerminateProcess`](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-terminateprocess#remarks)
+  is asynchronous for another process; Microsoft says to wait on the process
+  handle to be sure termination occurred.
+- [Pipe Handle Inheritance](https://learn.microsoft.com/en-us/windows/win32/ipc/pipe-handle-inheritance)
+  documents that pipe handles can be inherited and that a reader reaches EOF
+  only after all write handles are closed.
+- [`GetSystemDirectoryW`](https://learn.microsoft.com/en-us/windows/win32/api/sysinfoapi/nf-sysinfoapi-getsystemdirectoryw)
+  documents how Windows supplies the system-directory path.
+
+**Documented-source boundary:** These sources do not promise atomic process-
+tree capture, protection against PID reuse, inclusion of detached descendants,
+bounded arrival of `close`, termination of unrelated inherited-handle holders,
+or executable integrity. `TerminateProcess` is general Windows process
+documentation, not documentation of `taskkill` internals, and a system-
+directory path is not executable authentication. The sources do not say that
+`taskkill` internally calls `TerminateProcess`, that taskkill exit zero confirms
+termination, or that direct-child exit proves every descendant absent.
+
+## 76. Selected private subprocess dispositions and causal vocabulary
+
+**Selected future contract:** After the repair, new subprocess dispositions use
+exactly these private build codes and stable messages:
+
+| Private code | Stable message |
+| --- | --- |
+| `MOXLEY_NATIVE_BUILD_SUBPROCESS_SPAWN_FAILED` | `Native build subprocess could not be spawned.` |
+| `MOXLEY_NATIVE_BUILD_SUBPROCESS_TIMED_OUT` | `Native build subprocess exceeded its execution bound.` |
+| `MOXLEY_NATIVE_BUILD_SUBPROCESS_OUTPUT_LIMIT` | `Native build subprocess exceeded its output bound.` |
+| `MOXLEY_NATIVE_BUILD_SUBPROCESS_EXIT_FAILED` | `Native build subprocess did not exit successfully.` |
+| `MOXLEY_NATIVE_BUILD_SUBPROCESS_TERMINATION_UNCONFIRMED` | `Native build subprocess termination could not be confirmed.` |
+
+`MOXLEY_NATIVE_BUILD_SUBPROCESS_FAILED` is retired for new subprocess
+dispositions after the repair. It remains a historical code. Existing logs,
+receipts, test output, and PR records remain historical evidence and may not be
+silently reinterpreted as one of the new dispositions.
+
+**Selected future contract:** The closed, bounded internal causal-reason
+vocabulary is exactly:
+
+- `SUBPROCESS_SPAWN_ERROR`;
+- `SUBPROCESS_TIMEOUT`;
+- `SUBPROCESS_STDOUT_LIMIT`;
+- `SUBPROCESS_STDERR_LIMIT`;
+- `SUBPROCESS_NONZERO_EXIT`;
+- `SUBPROCESS_SIGNALLED_EXIT`;
+- `SUBPROCESS_EXIT_WITHOUT_CLOSE`;
+- `SUBPROCESS_TERMINATION_TOOL_FAILED`; and
+- `SUBPROCESS_TERMINATION_NOT_CONFIRMED`.
+
+`SUBPROCESS_SPAWN_ERROR` maps to
+`MOXLEY_NATIVE_BUILD_SUBPROCESS_SPAWN_FAILED`. `SUBPROCESS_TIMEOUT` maps to
+`MOXLEY_NATIVE_BUILD_SUBPROCESS_TIMED_OUT` only after bounded termination is
+confirmed. `SUBPROCESS_STDOUT_LIMIT` and `SUBPROCESS_STDERR_LIMIT` map to
+`MOXLEY_NATIVE_BUILD_SUBPROCESS_OUTPUT_LIMIT` only after bounded termination is
+confirmed. `SUBPROCESS_NONZERO_EXIT` and `SUBPROCESS_SIGNALLED_EXIT` map to
+`MOXLEY_NATIVE_BUILD_SUBPROCESS_EXIT_FAILED` after bounded close evidence.
+`SUBPROCESS_EXIT_WITHOUT_CLOSE` enters termination handling; if bounded
+termination is then confirmed it maps to
+`MOXLEY_NATIVE_BUILD_SUBPROCESS_EXIT_FAILED`, otherwise it maps to
+`MOXLEY_NATIVE_BUILD_SUBPROCESS_TERMINATION_UNCONFIRMED`.
+`SUBPROCESS_TERMINATION_TOOL_FAILED` records failure of the dedicated taskkill
+wrapper. `SUBPROCESS_TERMINATION_NOT_CONFIRMED` records any termination-
+handling path whose selected grace ends without all required original-child and
+stream evidence, including safe taskkill non-dispatch after observed child
+exit. Both map to
+`MOXLEY_NATIVE_BUILD_SUBPROCESS_TERMINATION_UNCONFIRMED`.
+
+These codes and reasons are private diagnostics, not public package API. Stable
+messages and bounded reasons contain no raw stdout, stderr, command line,
+environment, absolute path, username, host data, or arbitrary thrown value.
+When termination cannot be confirmed, the original timeout, output, or exit-
+without-close reason remains internal causal context; it is not reported as
+though cleanup were confirmed.
+
+## 77. Selected subprocess timing policy
+
+**Selected future contract:** The exact fixed timing values are:
+
+| Operation | Bound |
+| --- | ---: |
+| Default subprocess execution | 30,000 ms |
+| Read-only PowerShell authentication | 90,000 ms |
+| Addon probe | 10,000 ms |
+| Exit-to-close drain grace | 5,000 ms |
+| Tree-termination command | 10,000 ms |
+| Post-termination exit/close grace | 5,000 ms |
+| Native-build and loader test-harness outer execution | 300,000 ms |
+
+The 90-second authentication bound supplies headroom over the observed
+23.9-second sample. It is not a performance guarantee, does not retry, and does
+not convert a late success into success; exceeding it remains failure. Every
+invocation receives exactly one execution allowance, started once when its
+spawn attempt begins. The fixed drain and termination graces are separate state
+machine phases, not timeout resets or additional execution allowances.
+
+No adaptive timeout, retry, polling-until-success, timeout reset, or
+environment-variable override is approved. The supervisor does not grant more
+time because progress, output, process creation, partial authentication, or an
+exit event was observed.
+
+## 78. Selected exact single-settlement process state machine
+
+**Selected future contract:** Every supervised subprocess follows this exact
+state machine:
+
+1. Spawn the exact executable with the exact argument vector, `shell: false`,
+   and bounded piped stdout and stderr. No shell, `PATH` lookup, or caller-
+   supplied command synthesis is used where this contract requires an
+   authenticated absolute executable.
+2. Bound stdout and stderr independently. The default fixed limit remains
+   2 MiB for each stream; reaching one limit does not consume or enlarge the
+   other limit.
+3. Record the first terminal trigger only: spawn error, execution timeout,
+   stdout overflow, stderr overflow, or exit.
+4. Never replace an earlier timeout or output disposition with a later generic
+   exit result. Later events may supply cleanup evidence but cannot change the
+   first bounded reason.
+5. On ordinary exit, record both emitted exit values. Code zero and signal
+   `null` are necessary but not sufficient for success. Allow only the fixed
+   exit-to-close drain grace and require bounded completion of both streams and
+   the `close` event.
+6. A nonzero code or non-null signal maps to
+   `MOXLEY_NATIVE_BUILD_SUBPROCESS_EXIT_FAILED` after bounded close evidence.
+   Code `null` is never an unexplained successful result.
+7. Exit without close and bounded stream completion inside the drain grace
+   maps to termination handling with reason
+   `SUBPROCESS_EXIT_WITHOUT_CLOSE`; it is not success.
+8. Timeout or output overflow stops accepting additional output and begins
+   termination handling. No later bytes enter retained diagnostic output.
+9. Termination handling follows section 79. A confirmed attempt preserves the
+   original timeout/output/exit disposition; unavailable confirmation replaces
+   the outer disposition with
+   `MOXLEY_NATIVE_BUILD_SUBPROCESS_TERMINATION_UNCONFIRMED` while retaining the
+   original reason only as bounded internal context.
+10. Settle the caller-visible result exactly once.
+11. On every settlement path, clear every timer, remove every listener that the
+    supervisor installed, release retained buffers and references
+    deterministically, and ignore later events without another disposition.
+
+**Selected future contract:** Spawn failure is `SUBPROCESS_SPAWN_ERROR` only
+when no successful spawn was observed. Because Node documents other meanings
+for the `error` event, an error after successful spawn is lifecycle evidence
+for the active state rather than a silently relabeled spawn failure.
+
+**Explicit nonclaim:** The fixed graces select a bounded fail-closed decision;
+they do not prove every descendant absent, turn `close` into process-tree
+evidence, or strengthen Node's documented event guarantees.
+
+## 79. Selected source-free Windows tree-termination attempt
+
+**Selected future contract:** The supported source-free Windows tree-
+termination attempt is the exact qualified-host executable
+`C:\Windows\System32\taskkill.exe` with arguments
+`/PID <positive-decimal-pid> /T /F`. The repair must authenticate the supported
+host's exact `C:\Windows` root and absolute System32 executable path, use
+`shell: false`, and perform no `PATH` lookup, environment expansion, alternate
+system-directory substitution, or caller-supplied executable selection.
+
+**Selected future contract:** The supervisor accepts only the positive integer
+PID captured directly from a child that the current supervisor created. No
+public or internal caller may supply a PID. It rejects PID `0`, the current
+process PID, the parent process PID, a child for which exit has already been
+observed, and any PID not in the current invocation's task-owned child record.
+It never intentionally targets a caller, the supervisor, its parent, or an
+unrelated process.
+
+**Selected future contract:** The taskkill attempt:
+
+- occurs only after a timeout, output overflow, or exit-without-close state
+  enters termination handling and only while the required task-owned PID
+  evidence remains usable;
+- uses a dedicated nonrecursive wrapper, never the same supervisor that is
+  being repaired;
+- has one 10,000 ms execution bound and independent fixed 2 MiB stdout and
+  stderr bounds;
+- never exposes, incorporates, or logs taskkill stdout or stderr;
+- treats spawn failure, timeout, output overflow, nonzero exit, signal exit, or
+  missing bounded completion of the tool as
+  `SUBPROCESS_TERMINATION_TOOL_FAILED`;
+- waits no longer than the separate 5,000 ms post-termination grace for the
+  original direct child's observed exit, bounded completion of both original
+  streams, and original `close`; and
+- treats termination as confirmed only when all of that original-child and
+  original-stream evidence is observed inside the grace.
+
+If the direct child exits before safe taskkill dispatch, including during an
+exit-without-close disposition, the supervisor must not dispatch taskkill to a
+possibly reusable PID. It may use only the remaining fixed post-termination
+grace to obtain stream closure; otherwise termination is unconfirmed.
+
+**Selected policy consequence:** A failed taskkill wrapper records
+`SUBPROCESS_TERMINATION_TOOL_FAILED`. A completed bounded wrapper without all
+required original-child exit, stream-completion, and close evidence records
+`SUBPROCESS_TERMINATION_NOT_CONFIRMED`; so does safe non-dispatch followed by a
+grace that ends without stream-completion and close evidence. Either condition returns
+`MOXLEY_NATIVE_BUILD_SUBPROCESS_TERMINATION_UNCONFIRMED`. The original timeout,
+output, or exit-without-close reason remains internal causal context and is not
+reported as if cleanup had been confirmed.
+
+**Documented limit and explicit nonclaim:** Microsoft documents `/T` as ending
+the selected process and child processes started by it. Moxley selects that as
+a supported termination attempt, not proof against PID reuse, hostile
+manipulation, already-detached descendants, inherited handles held by unrelated
+processes, or a compromised executable. An absolute System32 path is not
+cryptographic executable authentication. Taskkill completion is not itself
+proof that the original child exited or that its streams closed.
+
+## 80. Selected cleanup, lock, and lease consequences
+
+**Selected future contract:**
+`MOXLEY_NATIVE_BUILD_SUBPROCESS_TERMINATION_UNCONFIRMED` fails closed and
+creates no new cleanup authority:
+
+- before lease or lock acquisition, it creates no authority to remove or
+  mutate repository state;
+- after lock acquisition, it preserves the lock and every authenticated staging
+  path or staging artifact that exists;
+- at or after the first promotion, it preserves the lock, staging, binary, and
+  receipt evidence, including incomplete or mismatched subsets; and
+- at every phase, it prohibits deletion, overwrite, rollback, retry, resume,
+  automatic clean, or success reporting.
+
+The ordinary pre-promotion handled-failure cleanup path in section 63 must not
+run for termination-unconfirmed. The build lease remains open while the build
+process is alive. Process exit closes that lease but does not prove every
+descendant or inherited handle absent.
+
+**Selected future contract:** Explicit clean must refuse after termination-
+unconfirmed until an operator independently proves that no task-owned build,
+compiler, linker, probe, authentication, or termination process remains active.
+The current one-time named-pipe absence check is insufficient for that state.
+PID absence alone is not cleanup authority because identifiers are reusable and
+the available ancestry evidence is incomplete.
+
+No automatic stale-lock expiry, PID-age inference, reboot inference, background
+repair, rollback, retry, or resume is selected. If independent proof is not
+available, the lock and all authenticated evidence remain preserved for
+operator investigation.
+
+## 81. Selected native-build and loader test-harness policy
+
+**Observed fact:** The current native-build harness and the blocked PR #28
+loader harness each use a separate 120,000 ms, 1 MiB-per-stream, direct-child-
+kill supervisor that waits for `close`. Neither supplies tree termination or a
+closed local timeout reason, and either can expose `code: null` without an exact
+local disposition. Their cleanup paths do not first perform the complete
+timeout inventory selected here.
+
+**Selected future contract:** Both harnesses must use the repaired bounded
+supervisor semantics or an independently equivalent implementation. Their
+outer execution bound is 300,000 ms. Each harness must report an exact local
+code and closed reason for spawn failure, execution timeout, stdout or stderr
+overflow, nonzero exit, signal exit, and termination unconfirmed. It must never
+expose an unexplained code `null` as the only failure evidence.
+
+Harness timeout failure must not automatically invoke clean. Before any clean
+decision, the harness must inventory the exact lock, deterministic pipe,
+generated binary and receipt, authenticated staging, and task-owned build,
+compiler, linker, probe, authentication, and termination-process evidence. A
+termination-unconfirmed inventory follows section 80 and preserves evidence.
+
+**Blocked-candidate boundary:** This document does not amend PR #28's loader or
+harness. Only after the build-supervisor repair is independently reviewed and
+merged may PR #28 be rebased and its harness changed to consume repaired or
+independently equivalent supervision behavior.
+
+## 82. Subprocess-supervision candidate comparison
+
+1. **Increase the 30-second timeout only — rejected as incomplete.** It does
+   not distinguish failures or bound close settlement.
+2. **Settle immediately after `child.kill()` — rejected.** Signal delivery does
+   not prove child or stream termination.
+3. **Destroy streams and ignore descendants — rejected for qualified build
+   cleanup.** It discards evidence without proving process-tree or handle
+   closure.
+4. **Retry authentication or build — rejected.** It weakens deterministic
+   one-shot behavior.
+5. **Use taskkill tree termination plus bounded exit/close confirmation and
+   fail closed when confirmation is unavailable — selected source-free Windows
+   policy.** This is the disposition selected in sections 77 through 81.
+6. **Introduce a native Job Object supervisor — deferred.** It creates a
+   bootstrap/build dependency and requires a separate native contract.
+7. **Accept cooperative subprocess behavior without qualification — rejected
+   for the build gate.** Natural termination is useful test evidence but not a
+   cleanup guarantee.
+
+## 83. Documentation boundary and continuing no-go
+
+**Currently implemented boundary:** This documentation slice adds zero tests
+and changes only `STATE_COMPATIBILITY.md`. It changes no source, test, fixture,
+other document, manifest, lockfile, dependency, package version, generated
+output, build receipt, or public API. The package remains `moxley-db@3.1.1`
+under Apache-2.0 with its existing dependency graph.
+
+**Selected future contract:** Sections 76 through 82 define the repair policy;
+they do not implement it. Fact, document-supported inference, selected policy,
+ambiguity, and explicit nonclaim remain separately labeled. No observation or
+primary-source statement is silently promoted into a stronger process-tree,
+termination, handle-lifetime, timing, cleanup, or PR #28 causation guarantee.
+
+**Explicit nonclaim:** The complete Windows version-1 qualification remains
+**no-go**. This documentation does not authorize or claim repaired subprocess
+supervision, a merged private loader, production traversal, persisted-state
+acceptance, TOCTOU resistance, hostile-local-user resistance, distribution,
+release, npm publication, database locking, atomicity, rollback, recovery,
+durability, acknowledgement, migration, adapter behavior, or Thoth behavior.
