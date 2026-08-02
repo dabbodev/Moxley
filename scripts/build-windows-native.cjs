@@ -54,7 +54,9 @@ const KERNEL32_LIB = path.join(
 );
 const POWERSHELL_EXE = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe';
 const FSUTIL_EXE = 'C:\\Windows\\System32\\fsutil.exe';
+const WINDOWS_ROOT = 'C:\\Windows';
 const SYSTEM32 = 'C:\\Windows\\System32';
+const TASKKILL_EXE = 'C:\\Windows\\System32\\taskkill.exe';
 const EXPECTED_NODE_LIB = Object.freeze({
   byteLength: 2_869_366,
   sha256:
@@ -73,9 +75,37 @@ const REQUIRED_NODE_HEADERS = Object.freeze([
   'node_version.h',
 ]);
 const PROCESS_TIMEOUT_MS = 30_000;
+const AUTHENTICATION_TIMEOUT_MS = 90_000;
 const PROBE_TIMEOUT_MS = 10_000;
+const EXIT_CLOSE_GRACE_MS = 5_000;
+const TASKKILL_TIMEOUT_MS = 10_000;
+const POST_TERMINATION_GRACE_MS = 5_000;
 const MAX_PROCESS_OUTPUT_BYTES = 2 * 1024 * 1024;
 const MAX_JSON_BYTES = 16 * 1024;
+const SUBPROCESS_MESSAGES = Object.freeze({
+  MOXLEY_NATIVE_BUILD_SUBPROCESS_SPAWN_FAILED:
+    'Native build subprocess could not be spawned.',
+  MOXLEY_NATIVE_BUILD_SUBPROCESS_TIMED_OUT:
+    'Native build subprocess exceeded its execution bound.',
+  MOXLEY_NATIVE_BUILD_SUBPROCESS_OUTPUT_LIMIT:
+    'Native build subprocess exceeded its output bound.',
+  MOXLEY_NATIVE_BUILD_SUBPROCESS_EXIT_FAILED:
+    'Native build subprocess did not exit successfully.',
+  MOXLEY_NATIVE_BUILD_SUBPROCESS_TERMINATION_UNCONFIRMED:
+    'Native build subprocess termination could not be confirmed.',
+});
+const SUBPROCESS_REASONS = Object.freeze({
+  SPAWN_ERROR: 'SUBPROCESS_SPAWN_ERROR',
+  TIMEOUT: 'SUBPROCESS_TIMEOUT',
+  STDOUT_LIMIT: 'SUBPROCESS_STDOUT_LIMIT',
+  STDERR_LIMIT: 'SUBPROCESS_STDERR_LIMIT',
+  NONZERO_EXIT: 'SUBPROCESS_NONZERO_EXIT',
+  SIGNALLED_EXIT: 'SUBPROCESS_SIGNALLED_EXIT',
+  EXIT_WITHOUT_CLOSE: 'SUBPROCESS_EXIT_WITHOUT_CLOSE',
+  TERMINATION_TOOL_FAILED: 'SUBPROCESS_TERMINATION_TOOL_FAILED',
+  TERMINATION_NOT_CONFIRMED: 'SUBPROCESS_TERMINATION_NOT_CONFIRMED',
+});
+const TEST_CONTROL_TOKEN = Symbol('moxley-native-subprocess-test-control');
 const HEX_32 = /^[0-9a-f]{32}$/;
 const HEX_64 = /^[0-9a-f]{64}$/;
 const EXPECTED_RESULT_KEYS = Object.freeze([
@@ -177,6 +207,63 @@ function buildError(code, message) {
   return new NativeBuildError(code, message);
 }
 
+function subprocessBuildError(
+  code,
+  reason,
+  terminationConfirmed,
+  originalReason,
+) {
+  const message = SUBPROCESS_MESSAGES[code];
+  const acceptedReasons = Object.values(SUBPROCESS_REASONS);
+  if (
+    typeof message !== 'string' ||
+    !acceptedReasons.includes(reason) ||
+    typeof terminationConfirmed !== 'boolean' ||
+    (originalReason !== undefined && !acceptedReasons.includes(originalReason))
+  ) {
+    return buildError(
+      'MOXLEY_NATIVE_BUILD_FAILED',
+      'Native build failed.',
+    );
+  }
+  const error = buildError(code, message);
+  error.stack = `${error.name}: ${message}`;
+  error.reason = reason;
+  error.terminationConfirmed = terminationConfirmed;
+  if (originalReason !== undefined) {
+    error.cause = Object.freeze({ reason: originalReason });
+  }
+  return error;
+}
+
+function terminationUnconfirmedError(reason, originalReason) {
+  return subprocessBuildError(
+    'MOXLEY_NATIVE_BUILD_SUBPROCESS_TERMINATION_UNCONFIRMED',
+    reason,
+    false,
+    originalReason,
+  );
+}
+
+function isTerminationUnconfirmed(error) {
+  return (
+    error instanceof NativeBuildError &&
+    error.code ===
+      'MOXLEY_NATIVE_BUILD_SUBPROCESS_TERMINATION_UNCONFIRMED' &&
+    error.terminationConfirmed === false
+  );
+}
+
+function isSubprocessBuildError(error) {
+  return (
+    error instanceof NativeBuildError &&
+    typeof SUBPROCESS_MESSAGES[error.code] === 'string' &&
+    Object.values(SUBPROCESS_REASONS).includes(error.reason)
+  );
+}
+
+let cachedTaskkillAuthentication = null;
+
 function sha256(bytes) {
   return createHash('sha256').update(bytes).digest('hex');
 }
@@ -267,92 +354,666 @@ function decodeCanonicalJson(bytes, maxBytes = MAX_JSON_BYTES) {
   return value;
 }
 
-function runProcess(file, arguments_, options = {}) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(file, arguments_, {
-      cwd: options.cwd,
-      env: options.env,
-      shell: false,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      windowsHide: true,
-    });
-    const stdout = [];
-    const stderr = [];
+function boundedTimeout(value, fallback) {
+  const selected = value === undefined ? fallback : value;
+  if (
+    !Number.isSafeInteger(selected) ||
+    selected <= 0 ||
+    selected > 300_000
+  ) {
+    throw buildError(
+      'MOXLEY_NATIVE_BUILD_INPUT_INVALID',
+      'Native build subprocess bounds are invalid.',
+    );
+  }
+  return selected;
+}
+
+function isCanonicalTaskOwnedPid(child, pid) {
+  return (
+    child !== null &&
+    child.pid === pid &&
+    Number.isSafeInteger(pid) &&
+    pid > 0 &&
+    pid <= 0xffffffff &&
+    pid !== process.pid &&
+    pid !== process.ppid &&
+    /^[1-9][0-9]*$/.test(String(pid))
+  );
+}
+
+async function runTaskkill(
+  supervisedChild,
+  pid,
+  childHasExited,
+  onTerminationAttempt,
+) {
+  try {
+    await authenticateTerminationExecutable();
+  } catch {
+    return 'failed';
+  }
+  if (childHasExited()) return 'not-dispatched';
+  if (!isCanonicalTaskOwnedPid(supervisedChild, pid)) return 'failed';
+
+  return new Promise((resolve) => {
+    let taskkill = null;
+    let stdout = null;
+    let stderr = null;
+    let timer = null;
+    let settled = false;
+    let spawnObserved = false;
+    let exitObserved = false;
+    let closeObserved = false;
+    let stdoutCompleted = false;
+    let stderrCompleted = false;
+    let exitCode = null;
+    let exitSignal = null;
     let stdoutLength = 0;
     let stderrLength = 0;
-    let settled = false;
-    let timedOut = false;
-    const timeout = setTimeout(() => {
-      timedOut = true;
-      child.kill();
-    }, options.timeoutMs ?? PROCESS_TIMEOUT_MS);
 
-    function finish(error, result) {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      if (error) reject(error);
-      else resolve(result);
+    function removeListeners() {
+      if (taskkill !== null) {
+        taskkill.removeListener('spawn', onSpawn);
+        taskkill.removeListener('error', onError);
+        taskkill.removeListener('exit', onExit);
+        taskkill.removeListener('close', onClose);
+      }
+      if (stdout !== null) {
+        stdout.removeListener('data', onStdoutData);
+        stdout.removeListener('end', onStdoutEnd);
+        stdout.removeListener('error', onStreamError);
+      }
+      if (stderr !== null) {
+        stderr.removeListener('data', onStderrData);
+        stderr.removeListener('end', onStderrEnd);
+        stderr.removeListener('error', onStreamError);
+      }
     }
 
-    child.once('error', (error) => finish(error));
-    child.stdout.on('data', (chunk) => {
-      stdoutLength += chunk.length;
-      if (stdoutLength > MAX_PROCESS_OUTPUT_BYTES) {
-        child.kill();
-      } else {
-        stdout.push(chunk);
+    function finish(status, stopWrapper = false) {
+      if (settled) return;
+      settled = true;
+      if (timer !== null) clearTimeout(timer);
+      timer = null;
+      if (stopWrapper && taskkill !== null && !exitObserved) {
+        try {
+          taskkill.kill();
+        } catch {
+          // A failed direct signal does not broaden termination evidence.
+        }
       }
-    });
-    child.stderr.on('data', (chunk) => {
-      stderrLength += chunk.length;
-      if (stderrLength > MAX_PROCESS_OUTPUT_BYTES) {
-        child.kill();
-      } else {
-        stderr.push(chunk);
+      removeListeners();
+      if (stopWrapper) {
+        if (stdout !== null) stdout.destroy();
+        if (stderr !== null) stderr.destroy();
+        if (taskkill !== null) taskkill.unref();
       }
-    });
-    child.once('close', (code, signal) => {
+      taskkill = null;
+      stdout = null;
+      stderr = null;
+      resolve(status);
+    }
+
+    function maybeFinish() {
       if (
-        timedOut ||
-        stdoutLength > MAX_PROCESS_OUTPUT_BYTES ||
-        stderrLength > MAX_PROCESS_OUTPUT_BYTES
+        !settled &&
+        spawnObserved &&
+        exitObserved &&
+        closeObserved &&
+        stdoutCompleted &&
+        stderrCompleted
       ) {
-        finish(
-          buildError(
-            'MOXLEY_NATIVE_BUILD_SUBPROCESS_FAILED',
-            'A bounded native build subprocess failed.',
+        finish(exitCode === 0 && exitSignal === null ? 'succeeded' : 'failed');
+      }
+    }
+
+    function onSpawn() {
+      spawnObserved = true;
+      if (onTerminationAttempt !== null) {
+        try {
+          onTerminationAttempt(
+            Object.freeze({
+              authenticatedExecutable: true,
+              canonicalPid: true,
+              tree: true,
+              force: true,
+            }),
+          );
+        } catch {
+          // Test-only observation cannot affect subprocess disposition.
+        }
+      }
+    }
+
+    function onError() {
+      finish('failed', true);
+    }
+
+    function onExit(code, signal) {
+      exitObserved = true;
+      exitCode = code;
+      exitSignal = signal;
+      maybeFinish();
+    }
+
+    function onClose() {
+      closeObserved = true;
+      maybeFinish();
+    }
+
+    function onStdoutData(chunk) {
+      stdoutLength += chunk.length;
+      if (stdoutLength > MAX_PROCESS_OUTPUT_BYTES) finish('failed', true);
+    }
+
+    function onStderrData(chunk) {
+      stderrLength += chunk.length;
+      if (stderrLength > MAX_PROCESS_OUTPUT_BYTES) finish('failed', true);
+    }
+
+    function onStdoutEnd() {
+      stdoutCompleted = true;
+      maybeFinish();
+    }
+
+    function onStderrEnd() {
+      stderrCompleted = true;
+      maybeFinish();
+    }
+
+    function onStreamError() {
+      finish('failed', true);
+    }
+
+    timer = setTimeout(() => finish('failed', true), TASKKILL_TIMEOUT_MS);
+    try {
+      taskkill = spawn(
+        TASKKILL_EXE,
+        ['/PID', String(pid), '/T', '/F'],
+        {
+          shell: false,
+          stdio: ['ignore', 'pipe', 'pipe'],
+          windowsHide: true,
+        },
+      );
+    } catch {
+      finish('failed');
+      return;
+    }
+    stdout = taskkill.stdout;
+    stderr = taskkill.stderr;
+    taskkill.once('spawn', onSpawn);
+    taskkill.once('error', onError);
+    taskkill.once('exit', onExit);
+    taskkill.once('close', onClose);
+    stdout.on('data', onStdoutData);
+    stdout.once('end', onStdoutEnd);
+    stdout.once('error', onStreamError);
+    stderr.on('data', onStderrData);
+    stderr.once('end', onStderrEnd);
+    stderr.once('error', onStreamError);
+  });
+}
+
+async function runProcess(file, arguments_, options = {}, testControl = null) {
+  await authenticateTerminationExecutable();
+  const timeoutMs = boundedTimeout(options.timeoutMs, PROCESS_TIMEOUT_MS);
+  const acceptedTestControl =
+    testControl !== null && testControl.token === TEST_CONTROL_TOKEN
+      ? testControl
+      : null;
+  const exitCloseGraceMs =
+    acceptedTestControl === null
+      ? EXIT_CLOSE_GRACE_MS
+      : acceptedTestControl.exitCloseGraceMs;
+  const postTerminationGraceMs =
+    acceptedTestControl === null
+      ? POST_TERMINATION_GRACE_MS
+      : acceptedTestControl.postTerminationGraceMs;
+
+  return new Promise((resolve, reject) => {
+    let child = null;
+    let stdin = null;
+    let stdout = null;
+    let stderr = null;
+    let stdoutChunks = [];
+    let stderrChunks = [];
+    let stdoutLength = 0;
+    let stderrLength = 0;
+    let executionTimer = null;
+    let exitCloseTimer = null;
+    let postTerminationTimer = null;
+    let settled = false;
+    let spawnObserved = false;
+    let exitObserved = false;
+    let closeObserved = false;
+    let stdoutCompleted = false;
+    let stderrCompleted = false;
+    let stdoutOverflowed = false;
+    let stderrOverflowed = false;
+    let acceptingOutput = true;
+    let exitCode = null;
+    let exitSignal = null;
+    let terminalTrigger = null;
+    let terminationStarted = false;
+    let terminationConfirmationReady = false;
+    let terminationOriginalReason = null;
+    let terminationObserver =
+      acceptedTestControl === null
+        ? null
+        : acceptedTestControl.onTerminationAttempt;
+
+    function clearTimers() {
+      if (executionTimer !== null) clearTimeout(executionTimer);
+      if (exitCloseTimer !== null) clearTimeout(exitCloseTimer);
+      if (postTerminationTimer !== null) clearTimeout(postTerminationTimer);
+      executionTimer = null;
+      exitCloseTimer = null;
+      postTerminationTimer = null;
+    }
+
+    function removeListeners() {
+      if (child !== null) {
+        child.removeListener('spawn', onSpawn);
+        child.removeListener('error', onChildError);
+        child.removeListener('exit', onExit);
+        child.removeListener('close', onClose);
+      }
+      if (stdin !== null) stdin.removeListener('error', onStdinError);
+      if (stdout !== null) {
+        stdout.removeListener('data', onStdoutData);
+        stdout.removeListener('end', onStdoutEnd);
+        stdout.removeListener('error', onStdoutError);
+      }
+      if (stderr !== null) {
+        stderr.removeListener('data', onStderrData);
+        stderr.removeListener('end', onStderrEnd);
+        stderr.removeListener('error', onStderrError);
+      }
+    }
+
+    function releaseReferences(releaseOpenHandles) {
+      removeListeners();
+      if (releaseOpenHandles) {
+        if (stdin !== null) stdin.destroy();
+        if (stdout !== null) stdout.destroy();
+        if (stderr !== null) stderr.destroy();
+        if (child !== null) child.unref();
+      }
+      child = null;
+      stdin = null;
+      stdout = null;
+      stderr = null;
+      stdoutChunks.length = 0;
+      stderrChunks.length = 0;
+      stdoutChunks = null;
+      stderrChunks = null;
+      terminationObserver = null;
+    }
+
+    function settleError(error) {
+      if (settled) return;
+      settled = true;
+      clearTimers();
+      releaseReferences(!closeObserved);
+      reject(error);
+    }
+
+    function settleResult() {
+      if (settled) return;
+      const result = Object.freeze({
+        code: exitCode,
+        signal: exitSignal,
+        stdout: Buffer.concat(stdoutChunks, stdoutLength),
+        stderr: Buffer.concat(stderrChunks, stderrLength),
+      });
+      settled = true;
+      clearTimers();
+      releaseReferences(false);
+      resolve(result);
+    }
+
+    function selectTerminalTrigger(kind, reason) {
+      if (settled || terminalTrigger !== null) return false;
+      terminalTrigger = Object.freeze({ kind, reason });
+      return true;
+    }
+
+    function hasExplainableExit() {
+      return (
+        (Number.isInteger(exitCode) && exitSignal === null) ||
+        (exitCode === null &&
+          typeof exitSignal === 'string' &&
+          exitSignal.length !== 0)
+      );
+    }
+
+    function originalTerminationConfirmed() {
+      return (
+        exitObserved &&
+        stdoutCompleted &&
+        stderrCompleted &&
+        closeObserved
+      );
+    }
+
+    function confirmedTerminationError() {
+      if (terminationOriginalReason === SUBPROCESS_REASONS.TIMEOUT) {
+        return subprocessBuildError(
+          'MOXLEY_NATIVE_BUILD_SUBPROCESS_TIMED_OUT',
+          terminationOriginalReason,
+          true,
+        );
+      }
+      if (
+        terminationOriginalReason === SUBPROCESS_REASONS.STDOUT_LIMIT ||
+        terminationOriginalReason === SUBPROCESS_REASONS.STDERR_LIMIT
+      ) {
+        return subprocessBuildError(
+          'MOXLEY_NATIVE_BUILD_SUBPROCESS_OUTPUT_LIMIT',
+          terminationOriginalReason,
+          true,
+        );
+      }
+      return subprocessBuildError(
+        'MOXLEY_NATIVE_BUILD_SUBPROCESS_EXIT_FAILED',
+        SUBPROCESS_REASONS.EXIT_WITHOUT_CLOSE,
+        true,
+      );
+    }
+
+    function maybeFinishTerminationConfirmation() {
+      if (
+        settled ||
+        !terminationStarted ||
+        !terminationConfirmationReady
+      ) {
+        return;
+      }
+      if (originalTerminationConfirmed()) {
+        settleError(confirmedTerminationError());
+      }
+    }
+
+    function beginPostTerminationConfirmation() {
+      if (settled) return;
+      terminationConfirmationReady = true;
+      if (originalTerminationConfirmed()) {
+        settleError(confirmedTerminationError());
+        return;
+      }
+      postTerminationTimer = setTimeout(() => {
+        postTerminationTimer = null;
+        settleError(
+          terminationUnconfirmedError(
+            SUBPROCESS_REASONS.TERMINATION_NOT_CONFIRMED,
+            terminationOriginalReason,
+          ),
+        );
+      }, postTerminationGraceMs);
+    }
+
+    async function beginTermination(reason) {
+      if (settled || terminationStarted) return;
+      terminationStarted = true;
+      terminationOriginalReason = reason;
+      acceptingOutput = false;
+      if (executionTimer !== null) clearTimeout(executionTimer);
+      if (exitCloseTimer !== null) clearTimeout(exitCloseTimer);
+      executionTimer = null;
+      exitCloseTimer = null;
+
+      if (exitObserved) {
+        beginPostTerminationConfirmation();
+        return;
+      }
+      if (!spawnObserved || child === null) {
+        settleError(
+          terminationUnconfirmedError(
+            SUBPROCESS_REASONS.TERMINATION_TOOL_FAILED,
+            terminationOriginalReason,
           ),
         );
         return;
       }
-      finish(null, {
-        code,
-        signal,
-        stdout: Buffer.concat(stdout),
-        stderr: Buffer.concat(stderr),
-      });
-    });
 
-    if (options.stdin === undefined) child.stdin.end();
-    else child.stdin.end(options.stdin);
+      const supervisedChild = child;
+      const pid = supervisedChild.pid;
+      const taskkillResult = await runTaskkill(
+        supervisedChild,
+        pid,
+        () => exitObserved,
+        terminationObserver,
+      );
+      if (settled) return;
+      if (taskkillResult === 'failed') {
+        settleError(
+          terminationUnconfirmedError(
+            SUBPROCESS_REASONS.TERMINATION_TOOL_FAILED,
+            terminationOriginalReason,
+          ),
+        );
+        return;
+      }
+      beginPostTerminationConfirmation();
+    }
+
+    function maybeFinishExit() {
+      if (
+        settled ||
+        terminationStarted ||
+        terminalTrigger === null ||
+        terminalTrigger.kind !== 'exit'
+      ) {
+        return;
+      }
+      if (
+        exitObserved &&
+        stdoutCompleted &&
+        stderrCompleted &&
+        closeObserved &&
+        !stdoutOverflowed &&
+        !stderrOverflowed &&
+        hasExplainableExit()
+      ) {
+        settleResult();
+        return;
+      }
+      if (exitObserved && exitCloseTimer === null) {
+        exitCloseTimer = setTimeout(() => {
+          exitCloseTimer = null;
+          void beginTermination(SUBPROCESS_REASONS.EXIT_WITHOUT_CLOSE);
+        }, exitCloseGraceMs);
+      }
+    }
+
+    function onSpawn() {
+      spawnObserved = true;
+      if (
+        acceptedTestControl !== null &&
+        acceptedTestControl.signalAfterSpawn
+      ) {
+        try {
+          child.kill('SIGTERM');
+        } catch {
+          // The execution timer remains the bound if the test-only signal fails.
+        }
+      }
+    }
+
+    function onChildError() {
+      if (!spawnObserved && selectTerminalTrigger('spawn-error', SUBPROCESS_REASONS.SPAWN_ERROR)) {
+        settleError(
+          subprocessBuildError(
+            'MOXLEY_NATIVE_BUILD_SUBPROCESS_SPAWN_FAILED',
+            SUBPROCESS_REASONS.SPAWN_ERROR,
+            false,
+          ),
+        );
+      }
+    }
+
+    function onExit(code, signal) {
+      exitObserved = true;
+      exitCode = code;
+      exitSignal = signal;
+      if (selectTerminalTrigger('exit', null)) {
+        if (executionTimer !== null) clearTimeout(executionTimer);
+        executionTimer = null;
+        maybeFinishExit();
+      } else {
+        maybeFinishTerminationConfirmation();
+      }
+    }
+
+    function onClose() {
+      closeObserved = true;
+      maybeFinishExit();
+      maybeFinishTerminationConfirmation();
+    }
+
+    function retainChunk(chunks, chunk, length) {
+      const remaining = MAX_PROCESS_OUTPUT_BYTES - length;
+      if (remaining <= 0) return 0;
+      const accepted = Math.min(remaining, chunk.length);
+      if (accepted !== 0) chunks.push(chunk.subarray(0, accepted));
+      return accepted;
+    }
+
+    function onStdoutData(chunk) {
+      if (!acceptingOutput) return;
+      const accepted = retainChunk(stdoutChunks, chunk, stdoutLength);
+      stdoutLength += accepted;
+      if (accepted !== chunk.length) {
+        if (
+          selectTerminalTrigger(
+            'stdout-overflow',
+            SUBPROCESS_REASONS.STDOUT_LIMIT,
+          )
+        ) {
+          stdoutOverflowed = true;
+          acceptingOutput = false;
+          void beginTermination(SUBPROCESS_REASONS.STDOUT_LIMIT);
+        }
+      }
+    }
+
+    function onStderrData(chunk) {
+      if (!acceptingOutput) return;
+      const accepted = retainChunk(stderrChunks, chunk, stderrLength);
+      stderrLength += accepted;
+      if (accepted !== chunk.length) {
+        if (
+          selectTerminalTrigger(
+            'stderr-overflow',
+            SUBPROCESS_REASONS.STDERR_LIMIT,
+          )
+        ) {
+          stderrOverflowed = true;
+          acceptingOutput = false;
+          void beginTermination(SUBPROCESS_REASONS.STDERR_LIMIT);
+        }
+      }
+    }
+
+    function onStdoutEnd() {
+      stdoutCompleted = true;
+      maybeFinishExit();
+      maybeFinishTerminationConfirmation();
+    }
+
+    function onStderrEnd() {
+      stderrCompleted = true;
+      maybeFinishExit();
+      maybeFinishTerminationConfirmation();
+    }
+
+    function onStdinError() {
+      // Stdin failure is bounded by the existing terminal-trigger state machine.
+    }
+
+    function onStdoutError() {
+      stdoutCompleted = false;
+    }
+
+    function onStderrError() {
+      stderrCompleted = false;
+    }
+
+    function onExecutionTimeout() {
+      executionTimer = null;
+      if (selectTerminalTrigger('timeout', SUBPROCESS_REASONS.TIMEOUT)) {
+        acceptingOutput = false;
+        void beginTermination(SUBPROCESS_REASONS.TIMEOUT);
+      }
+    }
+
+    executionTimer = setTimeout(onExecutionTimeout, timeoutMs);
+    try {
+      child = spawn(file, arguments_, {
+        cwd: options.cwd,
+        env: options.env,
+        shell: false,
+        stdio: ['pipe', 'pipe', 'pipe'],
+        windowsHide: true,
+      });
+    } catch {
+      selectTerminalTrigger('spawn-error', SUBPROCESS_REASONS.SPAWN_ERROR);
+      settleError(
+        subprocessBuildError(
+          'MOXLEY_NATIVE_BUILD_SUBPROCESS_SPAWN_FAILED',
+          SUBPROCESS_REASONS.SPAWN_ERROR,
+          false,
+        ),
+      );
+      return;
+    }
+
+    stdin = child.stdin;
+    stdout = child.stdout;
+    stderr = child.stderr;
+    child.once('spawn', onSpawn);
+    child.on('error', onChildError);
+    child.once('exit', onExit);
+    child.once('close', onClose);
+    stdin.on('error', onStdinError);
+    stdout.on('data', onStdoutData);
+    stdout.once('end', onStdoutEnd);
+    stdout.on('error', onStdoutError);
+    stderr.on('data', onStderrData);
+    stderr.once('end', onStderrEnd);
+    stderr.on('error', onStderrError);
+
+    try {
+      if (options.stdin === undefined) stdin.end();
+      else stdin.end(options.stdin);
+    } catch {
+      // Invalid or closed stdin cannot escape the bounded state machine.
+    }
   });
 }
 
-async function requireProcessSuccess(label, file, arguments_, options) {
-  let result;
-  try {
-    result = await runProcess(file, arguments_, options);
-  } catch {
-    throw buildError(
-      'MOXLEY_NATIVE_BUILD_SUBPROCESS_FAILED',
-      `${label} failed.`,
+async function requireProcessSuccess(
+  label,
+  file,
+  arguments_,
+  options,
+  testControl = null,
+) {
+  const result = await runProcess(file, arguments_, options, testControl);
+  if (result.signal !== null) {
+    throw subprocessBuildError(
+      'MOXLEY_NATIVE_BUILD_SUBPROCESS_EXIT_FAILED',
+      SUBPROCESS_REASONS.SIGNALLED_EXIT,
+      true,
     );
   }
-  if (result.code !== 0 || result.signal !== null) {
-    throw buildError(
-      'MOXLEY_NATIVE_BUILD_SUBPROCESS_FAILED',
-      `${label} failed.`,
+  if (result.code !== 0) {
+    throw subprocessBuildError(
+      'MOXLEY_NATIVE_BUILD_SUBPROCESS_EXIT_FAILED',
+      SUBPROCESS_REASONS.NONZERO_EXIT,
+      true,
     );
   }
   const output = Buffer.concat([result.stdout, result.stderr]).toString('utf8');
@@ -363,6 +1024,75 @@ async function requireProcessSuccess(label, file, arguments_, options) {
     );
   }
   return result;
+}
+
+function testProcessInvocation(options = {}) {
+  const productionOptions = { ...options };
+  const exitCloseGraceMs = productionOptions.exitCloseGraceMs;
+  const postTerminationGraceMs = productionOptions.postTerminationGraceMs;
+  const onTerminationAttempt = productionOptions.onTerminationAttempt;
+  const signalAfterSpawn = productionOptions.signalAfterSpawn;
+  delete productionOptions.exitCloseGraceMs;
+  delete productionOptions.postTerminationGraceMs;
+  delete productionOptions.onTerminationAttempt;
+  delete productionOptions.signalAfterSpawn;
+
+  function testGrace(value, fallback) {
+    if (value === undefined) return fallback;
+    if (!Number.isSafeInteger(value) || value <= 0 || value > fallback) {
+      throw buildError(
+        'MOXLEY_NATIVE_BUILD_TEST_SCOPE_INVALID',
+        'Injected native build test scope is invalid.',
+      );
+    }
+    return value;
+  }
+
+  if (
+    onTerminationAttempt !== undefined &&
+    typeof onTerminationAttempt !== 'function'
+  ) {
+    throw buildError(
+      'MOXLEY_NATIVE_BUILD_TEST_SCOPE_INVALID',
+      'Injected native build test scope is invalid.',
+    );
+  }
+  if (signalAfterSpawn !== undefined && signalAfterSpawn !== true) {
+    throw buildError(
+      'MOXLEY_NATIVE_BUILD_TEST_SCOPE_INVALID',
+      'Injected native build test scope is invalid.',
+    );
+  }
+
+  return Object.freeze({
+    options: productionOptions,
+    control: Object.freeze({
+      token: TEST_CONTROL_TOKEN,
+      exitCloseGraceMs: testGrace(exitCloseGraceMs, EXIT_CLOSE_GRACE_MS),
+      postTerminationGraceMs: testGrace(
+        postTerminationGraceMs,
+        POST_TERMINATION_GRACE_MS,
+      ),
+      onTerminationAttempt: onTerminationAttempt ?? null,
+      signalAfterSpawn: signalAfterSpawn === true,
+    }),
+  });
+}
+
+function runProcessForTest(file, arguments_, options) {
+  const invocation = testProcessInvocation(options);
+  return runProcess(file, arguments_, invocation.options, invocation.control);
+}
+
+function requireProcessSuccessForTest(label, file, arguments_, options) {
+  const invocation = testProcessInvocation(options);
+  return requireProcessSuccess(
+    label,
+    file,
+    arguments_,
+    invocation.options,
+    invocation.control,
+  );
 }
 
 function encodedPowerShell(command) {
@@ -384,7 +1114,7 @@ async function runPowerShellJson(command, environment) {
     ],
     {
       env: { ...process.env, ...environment },
-      timeoutMs: PROCESS_TIMEOUT_MS,
+      timeoutMs: AUTHENTICATION_TIMEOUT_MS,
     },
   );
   const stdout = result.stdout.toString('utf8').trim();
@@ -410,7 +1140,8 @@ async function assertNoReparse(target) {
     result = await runProcess(FSUTIL_EXE, ['reparsepoint', 'query', target], {
       timeoutMs: PROCESS_TIMEOUT_MS,
     });
-  } catch {
+  } catch (error) {
+    if (isSubprocessBuildError(error)) throw error;
     throw buildError(
       'MOXLEY_NATIVE_BUILD_PATH_INVALID',
       'A native build path could not be authenticated.',
@@ -475,6 +1206,71 @@ function sameIdentity(metadata, identity, includeSize = true) {
     (identity.type === 'file' ? metadata.isFile() : metadata.isDirectory()) &&
     !metadata.isSymbolicLink()
   );
+}
+
+async function authenticateTerminationExecutable() {
+  if (cachedTaskkillAuthentication !== null) {
+    return cachedTaskkillAuthentication;
+  }
+
+  try {
+    const windowsMetadata = await fsp.lstat(WINDOWS_ROOT, { bigint: true });
+    const system32Metadata = await fsp.lstat(SYSTEM32, { bigint: true });
+    const executableMetadata = await fsp.lstat(TASKKILL_EXE, { bigint: true });
+    if (
+      !windowsMetadata.isDirectory() ||
+      windowsMetadata.isSymbolicLink() ||
+      !system32Metadata.isDirectory() ||
+      system32Metadata.isSymbolicLink() ||
+      !executableMetadata.isFile() ||
+      executableMetadata.isSymbolicLink()
+    ) {
+      throw new Error('TERMINATION_EXECUTABLE_TYPE_INVALID');
+    }
+
+    const canonicalWindows = await fsp.realpath(WINDOWS_ROOT);
+    const canonicalSystem32 = await fsp.realpath(SYSTEM32);
+    const canonicalExecutable = await fsp.realpath(TASKKILL_EXE);
+    if (
+      !sameWindowsPath(canonicalWindows, WINDOWS_ROOT) ||
+      !sameWindowsPath(canonicalSystem32, SYSTEM32) ||
+      !sameWindowsPath(canonicalExecutable, TASKKILL_EXE)
+    ) {
+      throw new Error('TERMINATION_EXECUTABLE_CANONICAL_INVALID');
+    }
+
+    const canonicalWindowsMetadata = await fsp.stat(canonicalWindows, {
+      bigint: true,
+    });
+    const canonicalSystem32Metadata = await fsp.stat(canonicalSystem32, {
+      bigint: true,
+    });
+    const canonicalExecutableMetadata = await fsp.stat(canonicalExecutable, {
+      bigint: true,
+    });
+    const windowsIdentity = identityOf(windowsMetadata);
+    const system32Identity = identityOf(system32Metadata);
+    const executableIdentity = identityOf(executableMetadata);
+    if (
+      !sameIdentity(canonicalWindowsMetadata, windowsIdentity, false) ||
+      !sameIdentity(canonicalSystem32Metadata, system32Identity, false) ||
+      !sameIdentity(canonicalExecutableMetadata, executableIdentity, true)
+    ) {
+      throw new Error('TERMINATION_EXECUTABLE_IDENTITY_INVALID');
+    }
+
+    const authenticated = Object.freeze({
+      windowsRoot: windowsIdentity,
+      system32: system32Identity,
+      executable: executableIdentity,
+    });
+    cachedTaskkillAuthentication = authenticated;
+    return authenticated;
+  } catch {
+    throw terminationUnconfirmedError(
+      SUBPROCESS_REASONS.TERMINATION_TOOL_FAILED,
+    );
+  }
 }
 
 async function assertAbsent(target, collision = false) {
@@ -1307,7 +2103,8 @@ async function runProbe(addonPath, probePath) {
     addonPath,
     probePath,
   });
-  const result = await runProcess(
+  const result = await requireProcessSuccess(
+    'Native addon probe',
     process.execPath,
     ['-e', PROBE_WORKER_SOURCE],
     {
@@ -1320,11 +2117,7 @@ async function runProbe(addonPath, probePath) {
       },
     },
   );
-  if (
-    result.code !== 0 ||
-    result.signal !== null ||
-    result.stderr.length !== 0
-  ) {
+  if (result.stderr.length !== 0) {
     throw buildError(
       'MOXLEY_NATIVE_BUILD_PROBE_FAILED',
       'Native addon probe failed.',
@@ -1549,6 +2342,14 @@ async function promoteAndFinalize(context) {
 }
 
 async function handleBuildFailure(state, originalError) {
+  if (isTerminationUnconfirmed(originalError)) {
+    if (state.lease !== null) {
+      await state.lease.close().catch(() => {});
+      state.lease = null;
+    }
+    throw originalError;
+  }
+
   let failure = originalError;
   if (!state.firstPromotionOccurred) {
     try {
@@ -1667,7 +2468,13 @@ async function exercisePromotionScenario(sandboxRoot, mode) {
   if (
     path.dirname(canonicalSandbox).toLowerCase() !== tempRoot.toLowerCase() ||
     !path.basename(canonicalSandbox).startsWith('moxley-native-build-test-') ||
-    !['success', 'pre', 'post'].includes(mode)
+    ![
+      'success',
+      'pre',
+      'post',
+      'termination-unconfirmed-pre',
+      'termination-unconfirmed-post',
+    ].includes(mode)
   ) {
     throw buildError(
       'MOXLEY_NATIVE_BUILD_TEST_SCOPE_INVALID',
@@ -1727,20 +2534,29 @@ async function exercisePromotionScenario(sandboxRoot, mode) {
       'moxley-windows-reparse-probe.txt',
     ]),
   };
+  function injectedFailure(code, message) {
+    if (mode.startsWith('termination-unconfirmed-')) {
+      return terminationUnconfirmedError(
+        SUBPROCESS_REASONS.TERMINATION_NOT_CONFIRMED,
+        SUBPROCESS_REASONS.TIMEOUT,
+      );
+    }
+    return buildError(code, message);
+  }
   const hooks = {
     beforeBinaryPromotion:
-      mode === 'pre'
+      mode === 'pre' || mode === 'termination-unconfirmed-pre'
         ? async () => {
-            throw buildError(
+            throw injectedFailure(
               'MOXLEY_NATIVE_BUILD_INJECTED_FAILURE',
               'Injected pre-promotion failure.',
             );
           }
         : undefined,
     afterBinaryPromotion:
-      mode === 'post'
+      mode === 'post' || mode === 'termination-unconfirmed-post'
         ? async () => {
-            throw buildError(
+            throw injectedFailure(
               'MOXLEY_NATIVE_BUILD_INJECTED_FAILURE',
               'Injected post-promotion failure.',
             );
@@ -1778,6 +2594,12 @@ async function exercisePromotionScenario(sandboxRoot, mode) {
         observations,
         failed: true,
         code: handled.code,
+        reason: handled.reason,
+        terminationConfirmed: handled.terminationConfirmed,
+        causeReason:
+          handled.cause && typeof handled.cause.reason === 'string'
+            ? handled.cause.reason
+            : undefined,
       };
     }
   }
@@ -1855,16 +2677,21 @@ const internal = Object.freeze({
 module.exports = Object.freeze({
   internal,
   __test: Object.freeze({
+    AUTHENTICATION_TIMEOUT_MS,
+    EXIT_CLOSE_GRACE_MS,
     MAX_PROCESS_OUTPUT_BYTES,
+    POST_TERMINATION_GRACE_MS,
     PROCESS_TIMEOUT_MS,
+    PROBE_TIMEOUT_MS,
+    TASKKILL_TIMEOUT_MS,
     authenticateBuildInputs,
     createReceipt,
     decodeReceiptBytes,
     exercisePromotionScenario,
-    requireProcessSuccess,
+    requireProcessSuccess: requireProcessSuccessForTest,
     repositoryLeaseIdentity,
     runBuild,
-    runProcess,
+    runProcess: runProcessForTest,
     validateReceipt,
   }),
 });
