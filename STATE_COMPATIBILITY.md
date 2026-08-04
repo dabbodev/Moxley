@@ -3,13 +3,14 @@
 Status: Marker separability, future node identity, derived runtime-location
 authority, root-input lexical rules, persisted-name grammar, filesystem
 canonicalization and containment policy, and the Windows reparse-classification
-mechanism are selected. The private production native source and explicit build
-and clean tooling are implemented and isolated. Native subprocess-supervision
-gaps are characterized and a repair contract is selected, but that policy is
-not implemented. The private loader remains blocked in an unchanged draft pull
-request; traversal integration remains absent and complete version-1
-qualification remains a no-go.
-Date: 2026-08-01
+mechanism are selected. The private production native source, explicit build
+and clean tooling, and bounded native subprocess supervision are implemented
+and isolated. The persistent carrier, wire schemas, byte-authoritative positive
+publication rule, denial states, and fail-closed retention policy are selected
+below, but none of that enforcement is implemented. The private loader remains
+blocked in an unchanged draft pull request; traversal integration remains absent
+and complete version-1 qualification remains a no-go.
+Date: 2026-08-03
 Historical behavior baseline: `518ab5ab58500a84246770e8ef0180856e127abd`
 Discriminator decision input baseline: `635a7c09bcca63c3abbb52d5c2fbbce4b87a9817`
 Persisted-evidence inventory baseline: `3368824d8ab58d6ce8a5964b2acb8c846823430e`
@@ -27,6 +28,11 @@ Native build and clean implementation baseline:
 `939160031487b44c9255947051b363a1eede18bd`
 Native subprocess-characterization baseline:
 `092a215bf37fc82d2ba71ea4f466d5d8fb63547d`
+Native subprocess-supervision contract baseline:
+`32377bd1bb34c7ad09dbb26684b2fd0637f929ac`
+Native subprocess-supervision implementation and termination-unconfirmed
+cleanup-contract input baseline:
+`d467771ad42b314f28af22ed01b4769be946b700`
 Blocked private-loader candidate head, not merged into authoritative `master`:
 `c019e83b21784135c5b171a5f104b2b96418ab07`
 Decision authority: David Giles, sole owner of Moxley
@@ -1888,6 +1894,18 @@ creates the generated binary, receipt, lock, or staging directory. They remain
 ignored and untracked; successful clean and test completion leave them absent,
 while bounded failure and crash policies can preserve them as evidence.
 
+**Selected future contract:** The one additional fixed private evidence path is:
+
+```text
+build/Release/.moxley-windows-reparse-build.disposition.json
+```
+
+This lock-adjacent disposition sidecar is required because a supervised failure
+can occur while the lock itself is being authenticated, before the selected
+staging directory exists. The sidecar is ignored, untracked, and private. It is
+not the generated receipt, persisted database state, a format discriminator, a
+package export, or a distributed artifact.
+
 **Selected future contract:** The exact private loader path remains
 `lib/internal/windows-reparse-classifier.cjs`. It exists only on blocked draft
 PR #28 at head `c019e83b21784135c5b171a5f104b2b96418ab07`; it is absent from
@@ -1948,6 +1966,12 @@ commands and the serial test command. It has no lifecycle script. There is no
 `binding.gyp`, so package installation has no implicit repository addon build
 input.
 
+**Selected future contract:** `clean:native:windows` remains zero-argument.
+Invoking the operator command does not supply independent proof or cleanup
+authority. No force or confirmation flag, environment override, token, nonce
+echo, prompt, PID inventory, elapsed-time threshold, reboot acknowledgement, or
+additional package-script variant is selected.
+
 **Explicit nonclaim:** The selected command names do not authorize install-time
 building, automatic repair, loader-triggered compilation, or any network
 access.
@@ -1977,6 +2001,14 @@ driver:
   before the first final promotion may remove only the exact authenticated
   staging directory and exact owned lock, while a failure at or after the first
   final promotion preserves final-output and lock evidence.
+
+**Selected future contract:** Section 80 supersedes that current failure path
+where persistent disposition is required. An ordinary handled failure after v2
+lock acquisition must persist and verify `CLEAN_AUTHORIZED` before build-owned
+cleanup may begin. Termination-unconfirmed after v2 lock acquisition instead
+attempts its exact terminal sidecar while the lease remains open and preserves
+every retained subset. A failure before lock acquisition creates no carrier or
+repository mutation.
 
 **Currently implemented boundary:** The exact authenticated build target is
 Windows 11 Home 25H2 build `26200.8875`, `win32` / `x64`, fixed local NTFS,
@@ -2011,10 +2043,11 @@ does not overwrite or silently replace an existing final binary, receipt, or
 lock. If either final output already exists, the build fails and instructs the
 operator to run the explicit clean command first. Concurrent builds are
 unsupported and fail through exclusive creation of the exact lock file. An
-abandoned lock is not automatically removed. The explicit clean command is the
-only approved recovery for an abandoned task-owned lock, subject to the
-stronger termination-unconfirmed policy in section 80. No retry loop or
-automatic recovery is approved.
+abandoned lock is not automatically removed. Under the current implementation,
+the explicit clean command is the only provided recovery for an abandoned
+task-owned lock. Section 80 supersedes pipe absence as future cleanup authority:
+only an exact authenticated v2 `CLEAN_AUTHORIZED` carrier permits retained-state
+removal. No retry loop or automatic recovery is approved.
 
 **Currently implemented boundary:** The build sequence is exactly:
 
@@ -2075,17 +2108,21 @@ For a handled failure at or after step 9, the build does not delete, overwrite,
 replace, or roll back either final output; does not report build success;
 leaves the lock present as incomplete-build evidence; preserves any incomplete
 binary/receipt pair; and stops without retry. A later explicit clean command is
-required. The current clean command uses the deterministic lease pipe as its
-cooperating-build activity evidence. Section 80 selects stronger evidence and
-preservation requirements after termination-unconfirmed.
+required under the current implementation. The current clean command uses the
+deterministic lease pipe as its cooperating-build activity evidence. Section 80
+selects a bound disposition carrier and stronger evidence and preservation
+requirements; a retained lock without `CLEAN_AUTHORIZED` is not future cleanup
+authority.
 
 **Currently implemented boundary — crash behavior:** A process crash may leave
 staging, the lock, only the final binary, both final outputs without completed
 verification, or another incomplete subset of generated state. The selected
 future loader must reject every missing, incomplete, invalid, or mismatched
-final pair. The explicit clean command is the only selected recovery, subject
-to section 80. No rollback, automatic repair, stale-lock timeout, PID-reuse
-inference, retry, or resume is selected.
+final pair. Under the current implementation, the explicit clean command is the
+only provided recovery. Section 80 instead selects indefinite retention for a
+crash-retained indeterminate lock and permits later explicit clean only for a
+valid v2 `CLEAN_AUTHORIZED` carrier. No rollback, automatic repair, stale-lock
+timeout, PID-reuse inference, retry, or resume is selected.
 
 **Currently implemented boundary:** The build starts the deterministic
 package-root-derived Windows named-pipe lease before exclusively creating the
@@ -2096,6 +2133,11 @@ validated lock: a successful connection is current cooperating-build evidence;
 an absent pipe makes the validated lock abandoned evidence under the current
 implementation. Neither driver uses PID, age, staleness, wait, retry, or
 PID-reuse inference.
+
+**Selected future contract:** Pipe absence never reclassifies `ACTIVE`,
+`TERMINATION_UNCONFIRMED`, or legacy v1 evidence as cleanup-authorizing. A
+pre-existing lock or disposition sidecar remains a collision and must not be
+overwritten, adopted, or repaired by a new build.
 
 **Explicit nonclaim:** The lock coordinates only the cooperating build and
 clean drivers. It is not a database lock, a hostile-local-user defense, a
@@ -2193,12 +2235,22 @@ only on the exact generated binary, receipt, and lock paths from section 59. It
 may additionally remove only the exact authenticated staging directory created
 by the build driver.
 
-**Currently implemented boundary:** Explicit clean is the only selected
-recovery for post-promotion or crash-retained incomplete generated state and an
-abandoned lock. It is not invoked automatically by the build.
+**Currently implemented boundary:** Under the current v1 implementation,
+explicit clean is the only provided recovery for post-promotion or
+crash-retained incomplete generated state and an abandoned lock. It is not
+invoked automatically by the build. Its one-time failed lease connection can
+currently lead to removal without a persisted terminal disposition; section 80
+records the selected replacement for that known mismatch.
 
-**Selected future contract:** The stronger termination-unconfirmed limits in
-section 80 apply before clean may remove state after that disposition.
+**Selected future contract:** Clean may add only the fixed disposition sidecar
+from section 59 to its exact private scope. After existing path, type, identity,
+containment, lock, staging, and inventory safety authentication succeeds, a live
+cooperating lease continues to return `MOXLEY_NATIVE_CLEAN_BUSY`. Lease absence
+is not authority. Only an exact bound v2 `CLEAN_AUTHORIZED` carrier may enter
+removal. Valid legacy v1, v2 `ACTIVE`, and v2 `TERMINATION_UNCONFIRMED` states
+instead require retention; malformed, orphaned, unknown, or unbound disposition
+evidence fails validation. Section 80 defines the exact schemas, codes,
+precedence, deletion order, and indefinite-retention consequence.
 
 **Currently implemented boundary:** Before removal, clean rejects a symbolic
 link, junction, detectable reparse point, unexpected filesystem type,
@@ -2217,6 +2269,11 @@ relative staging name, and a lowercase random nonce. Clean strictly validates
 that record, the non-following metadata and identity of every approved target,
 the staging inventory, and post-removal absence. Its success output contains
 only ordinal repository-relative approved paths.
+
+**Selected future contract:** New builds create only the immutable v2 `ACTIVE`
+lock selected in section 80. The optional terminal sidecar is a separate
+write-once file and never mutates, replaces, appends to, or upgrades that lock.
+Clean and operators never write either record.
 
 **Explicit nonclaim:** Clean removes generated local build state only. It is
 not rollback of database state, package installation, runtime behavior, or a
@@ -2444,6 +2501,11 @@ binary distribution is approved. Source-build distribution policy remains a
 later release decision. The first implementation is repository-development
 only on the exact qualified host.
 
+**Selected future contract:** The fixed disposition sidecar is also ignored,
+untracked local build evidence. Adding that private wire does not add a package
+file, database-state format, install artifact, release asset, or distribution
+decision.
+
 **Currently implemented boundary:** `build/Release` is ignored and generated
 output is absent after the explicit lifecycle and tests. No generated output
 is tracked. The package remains `moxley-db@3.1.1`, Apache-2.0, with only
@@ -2460,11 +2522,11 @@ state.
 
 ## 70. Explicitly deferred implementation and integration
 
-**Deferred implementation:** The completed build/clean slice and this
-documentation-only subprocess-policy slice still defer:
+**Deferred implementation:** The completed build/clean and bounded-subprocess
+slices and this documentation-only persistent-disposition decision still defer:
 
 - loader code and loader tests;
-- repaired subprocess-supervision code and tests;
+- v2 lock, disposition-sidecar, fail-closed clean code, and their tests;
 - `index.js` changes or public exports;
 - traversal integration;
 - persisted-format loading;
@@ -2480,21 +2542,21 @@ documentation-only subprocess-policy slice still defer:
 - migration; and
 - npm publication.
 
-**Explicit nonclaim:** The implemented build/clean boundary and selected future
-loader and supervision contracts do not select the complete accepted persisted
-schema, collection or executable-content
+**Explicit nonclaim:** The implemented build/clean and bounded-subprocess
+boundaries and selected future loader and disposition contracts do not select
+the complete accepted persisted schema, collection or executable-content
 policy, public open/create API, traversal error mapping, database locking,
 write protocol, recovery, durability, migration, adapter behavior, or Thoth
-behavior.
+behavior. Indefinite retention is a fail-stop policy, not crash recovery.
 
 ## 71. Documentation-only delta and continuing qualification no-go
 
-**Currently implemented boundary:** This contract changes only
+**Documentation-only Phase C boundary:** This contract changes only
 `STATE_COMPATIBILITY.md`. It adds no test, production source, native source,
 manifest, lockfile, dependency, package version, fixture, binary, build output,
-or generated receipt. The authoritative baseline is 66 tests, 15 tracked
-JavaScript/CJS/MJS files, one production C file, 19 persisted fixtures, three
-Markdown files, and two manifests.
+generated receipt, lock, or disposition sidecar. The current baseline is 66
+tests, 15 tracked JavaScript/CJS/MJS files, one production C file, 19 persisted
+fixtures, three Markdown files, and two manifests.
 
 **Selected future contract:** Policy, current characterization evidence,
 implemented boundaries, deferred implementation, and nonclaims remain
@@ -2505,26 +2567,40 @@ this documentation as current enforcement.
 **no-go**. This document does not claim TOCTOU resistance, hostile-local-user
 resistance, production traversal, package distribution, database locking,
 atomicity, rollback, recovery, durability, acknowledgement, migration, or
-runtime support.
+runtime support. Filesystem-retained bytes, `FileHandle.sync()`, close, and
+exact readback do not establish atomic publication, crash consistency,
+parent-directory or power-loss durability, or external acknowledgement.
 
 ## 72. Next independently testable boundary
 
-**Deferred implementation:** After this documentation pull request is reviewed
-and merged, the next isolated implementation slice may update only
-`scripts/build-windows-native.cjs`,
-`test/windows-native-subprocess.test.cjs`, and
-`test/windows-native-build.test.cjs`. It must implement the selected state
-machine in sections 76 through 81 and repair all six negative characterization
-tests without touching PR #28.
+**Currently implemented boundary:** The bounded subprocess-supervision contract
+was squash-merged as
+`32377bd1bb34c7ad09dbb26684b2fd0637f929ac`; its isolated implementation was
+squash-merged as `d467771ad42b314f28af22ed01b4769be946b700` with subject
+`Harden native subprocess supervision (#31)`. The implementation changes only
+`scripts/build-windows-native.cjs`, `test/windows-native-build.test.cjs`, and
+`test/windows-native-subprocess.test.cjs`. The current focused baselines are
+subprocess 6/6 and native build/clean lifecycle 10/10; the full suite is 66/66.
 
-**Selected future contract:** Only after that repair is independently reviewed
-and merged may PR #28 be rebased and its loader harness amended to consume the
-repaired supervision behavior. Until then PR #28 remains unchanged, draft,
-open, and unmerged at head `c019e83b21784135c5b171a5f104b2b96418ab07`.
+**Observed unresolved gate:** The merged failure handler closes the cooperating
+lease after termination-unconfirmed without first persisting a terminal
+disposition. Current clean can then treat one unsuccessful pipe connection as
+sufficient to proceed to authenticated removal. That is the unresolved
+persistent-disposition and cleanup-authority mismatch selected for repair in
+section 80; passing current tests characterize the implementation and do not
+resolve it.
 
-**Explicit nonclaim:** Completion of the supervision repair would not by itself
-authorize traversal, persisted-format acceptance, distribution, release, npm
-publication, or complete version-1 qualification.
+**Deferred implementation:** Only after this Phase C decision contract is
+reviewed and merged may a separately authorized isolated slice implement
+section 80 in the private build and clean tooling and their focused lifecycle
+tests. It must not touch, rebase, or amend PR #28, add a public API, or claim
+traversal, recovery, durability, or qualification.
+
+**Selected future contract:** Only after that disposition/clean repair is
+independently reviewed and merged may PR #28 be rebased and its loader harness
+amended to consume the repaired behavior. Until then PR #28 remains unchanged,
+draft, open, and unmerged at head
+`c019e83b21784135c5b171a5f104b2b96418ab07`.
 
 ## 73. Native subprocess-supervision authority and evidence labels
 
@@ -2549,43 +2625,59 @@ helpers/constants to the frozen private `__test` surface:
 
 **Currently implemented characterization:** The six top-level PR #29 tests are
 a negative-characterization slice. The ordinary zero-exit case is the control
-that preserves accepted success evidence; the remaining cases expose current
-failure collapse and settlement gaps. Every worker and descendant is created
-by the test task and has a finite natural lifetime. No test claims to reproduce
-PR #28's historical failure.
+that preserves accepted success evidence; the remaining cases exposed the
+then-current failure collapse and settlement gaps. Every worker and descendant
+is created by the test task and has a finite natural lifetime. No test claims to
+reproduce PR #28's historical failure.
+
+**Currently implemented boundary:** PR #30 was squash-merged as
+`32377bd1bb34c7ad09dbb26684b2fd0637f929ac` with subject
+`Define native subprocess supervision contract (#30)`. PR #31 then implemented
+that contract and was squash-merged as
+`d467771ad42b314f28af22ed01b4769be946b700` with subject
+`Harden native subprocess supervision (#31)`. The current private codes,
+reasons, fixed bounds, single-settlement state machine, and bounded source-free
+Windows tree-termination attempt are recorded in sections 76 through 79.
 
 **Authority audit:** This policy audit inspected complete
 `STATE_COMPATIBILITY.md`, the complete build and clean drivers, the native-build
 lifecycle tests, the merged subprocess-characterization tests, the complete
 private-loader candidate and harness from PR #28 without changing them, and PR
-#27 through PR #29 history and descriptions. It also inspected the primary
+#27 through PR #31 history and descriptions. It also inspected the primary
 Node.js and Microsoft sources recorded in section 75. Authoritative `master`
 contains 66 tests, 15 tracked JavaScript/CJS/MJS files, one production C file,
 19 persisted fixtures, three Markdown files, and two manifests.
+
+**Observed unresolved gate:** PR #31 does not persist terminal disposition
+evidence before closing the lease after termination-unconfirmed, and current
+clean can proceed after one unsuccessful pipe connection. Section 80 selects
+the missing carrier and cleanup authority. This is a post-merge P1 repair gate,
+not evidence that the subprocess state machine in sections 76 through 79 is
+unimplemented.
 
 **Blocked candidate evidence:** PR #28 remains unchanged, open, draft, and
 unmerged at head `c019e83b21784135c5b171a5f104b2b96418ab07` on branch
 `codex/moxley-private-native-loader`. Its author-controlled title,
 body, commits, file list and contents, and head contents remain unchanged. Its
 reviews, comments, threads, requested reviewers, checks, and labels also remain
-unchanged. Its hosted `CONFLICTING` / `DIRTY` recalculation after PR #29 is
-expected evidence from the shared `package.json` line, not authority to resolve,
-rebase, or amend it.
+unchanged. Its hosted `CONFLICTING` / `DIRTY` recalculation against the advanced
+`master` base is derived state, not authority to resolve, rebase, or amend it.
 
 ## 74. Observed subprocess facts, inference, ambiguity, and nonclaims
 
-**Observed fact:** The merged characterization proves that ordinary zero-exit
-evidence is retained as code `0`, signal `null`, and bounded stdout and stderr.
-It also proves that nonzero exit, spawn failure, timeout, stdout overflow, and
-stderr overflow currently collapse into
+**Historical PR #29 characterization:** The merged characterization proves that
+ordinary zero-exit evidence is retained as code `0`, signal `null`, and bounded
+stdout and stderr. It also proves that nonzero exit, spawn failure, timeout,
+stdout overflow, and stderr overflow then collapsed into
 `MOXLEY_NATIVE_BUILD_SUBPROCESS_FAILED`.
 
-**Observed fact:** On timeout the current supervisor invokes `child.kill()`
-only on the direct child. Timeout and output overflow do not settle the promise
-at their trigger; settlement waits for `close`. An inherited output handle can
-therefore make settlement substantially exceed the nominal timeout. In the
-task-owned inherited-pipe test, a 3,000 ms timeout settled between approximately
-8.5 and 14.3 seconds while the descendant had an 8,000 ms natural lifetime.
+**Historical PR #29 characterization:** On timeout the then-current supervisor
+invoked `child.kill()` only on the direct child. Timeout and output overflow did
+not settle the promise at their trigger; settlement waited for `close`. An
+inherited output handle could therefore make settlement substantially exceed
+the nominal timeout. In the task-owned inherited-pipe test, a 3,000 ms timeout
+settled between approximately 8.5 and 14.3 seconds while the descendant had an
+8,000 ms natural lifetime.
 The merged PR record preserves exact samples of 9,487.316 ms and 14,278.677 ms.
 
 **Document-supported inference:** Node.js documents that multiple processes
@@ -2604,13 +2696,19 @@ loader suite then passed 14/14. Later isolated read-only authentication
 succeeded at approximately 12.4 seconds and, sequentially, approximately 21.5
 and 23.9 seconds.
 
-**Inference:** The selected 90-second authentication bound supplies headroom
-over the observed 23.9-second sample. The current 30-second authentication
-allowance has limited observed headroom.
+**Currently implemented boundary:** PR #31 distinguishes spawn failure,
+nonzero or signal exit, timeout, per-stream output overflow, exit without close,
+and termination-unconfirmed under the closed reasons and fixed bounds in
+sections 76 through 79. Its focused subprocess suite passes 6/6. Those results
+do not establish persistent disposition or cleanup authority.
+
+**Inference:** The selected and implemented 90-second authentication bound
+supplies headroom over the observed 23.9-second sample. The historical 30-second
+authentication allowance had limited observed headroom.
 
 **Ambiguity and explicit nonclaim:** The historical PR #28 failure cause is
 unestablished. PR #29 neither reproduces nor explains it, and the observations
-do not prove that the current 30-second allowance caused it. The historical
+do not prove that the historical 30-second allowance caused it. The historical
 failure must not be described as a compiler, authentication, timeout, output,
 spawn, exit, signal, or termination failure without new causal evidence.
 
@@ -2677,7 +2775,7 @@ termination, or that direct-child exit proves every descendant absent.
 
 ## 76. Selected private subprocess dispositions and causal vocabulary
 
-**Selected future contract:** After the repair, new subprocess dispositions use
+**Currently implemented boundary:** New PR #31 subprocess dispositions use
 exactly these private build codes and stable messages:
 
 | Private code | Stable message |
@@ -2689,11 +2787,11 @@ exactly these private build codes and stable messages:
 | `MOXLEY_NATIVE_BUILD_SUBPROCESS_TERMINATION_UNCONFIRMED` | `Native build subprocess termination could not be confirmed.` |
 
 `MOXLEY_NATIVE_BUILD_SUBPROCESS_FAILED` is retired for new subprocess
-dispositions after the repair. It remains a historical code. Existing logs,
+dispositions. It remains a historical code. Existing logs,
 receipts, test output, and PR records remain historical evidence and may not be
 silently reinterpreted as one of the new dispositions.
 
-**Selected future contract:** The closed, bounded internal causal-reason
+**Currently implemented boundary:** The closed, bounded internal causal-reason
 vocabulary is exactly:
 
 - `SUBPROCESS_SPAWN_ERROR`;
@@ -2733,7 +2831,7 @@ though cleanup were confirmed.
 
 ## 77. Selected subprocess timing policy
 
-**Selected future contract:** The exact fixed timing values are:
+**Currently implemented boundary:** The exact fixed timing values are:
 
 | Operation | Bound |
 | --- | ---: |
@@ -2743,7 +2841,7 @@ though cleanup were confirmed.
 | Exit-to-close drain grace | 5,000 ms |
 | Tree-termination command | 10,000 ms |
 | Post-termination exit/close grace | 5,000 ms |
-| Native-build and loader test-harness outer execution | 300,000 ms |
+| Native-build test-harness outer execution | 300,000 ms |
 
 The 90-second authentication bound supplies headroom over the observed
 23.9-second sample. It is not a performance guarantee, does not retry, and does
@@ -2757,9 +2855,13 @@ environment-variable override is approved. The supervisor does not grant more
 time because progress, output, process creation, partial authentication, or an
 exit event was observed.
 
+The blocked PR #28 loader harness retains its historical 120,000 ms outer bound.
+A 300,000 ms loader-harness bound remains future behavior if that candidate is
+later authorized to resume; it is not implemented on authoritative `master`.
+
 ## 78. Selected exact single-settlement process state machine
 
-**Selected future contract:** Every supervised subprocess follows this exact
+**Currently implemented boundary:** Every supervised subprocess follows this exact
 state machine:
 
 1. Spawn the exact executable with the exact argument vector, `shell: false`,
@@ -2796,7 +2898,7 @@ state machine:
     supervisor installed, release retained buffers and references
     deterministically, and ignore later events without another disposition.
 
-**Selected future contract:** Spawn failure is `SUBPROCESS_SPAWN_ERROR` only
+**Currently implemented boundary:** Spawn failure is `SUBPROCESS_SPAWN_ERROR` only
 when no successful spawn was observed. Because Node documents other meanings
 for the `error` event, an error after successful spawn is lifecycle evidence
 for the active state rather than a silently relabeled spawn failure.
@@ -2807,15 +2909,15 @@ evidence, or strengthen Node's documented event guarantees.
 
 ## 79. Selected source-free Windows tree-termination attempt
 
-**Selected future contract:** The supported source-free Windows tree-
+**Currently implemented boundary:** The supported source-free Windows tree-
 termination attempt is the exact qualified-host executable
 `C:\Windows\System32\taskkill.exe` with arguments
-`/PID <positive-decimal-pid> /T /F`. The repair must authenticate the supported
-host's exact `C:\Windows` root and absolute System32 executable path, use
-`shell: false`, and perform no `PATH` lookup, environment expansion, alternate
+`/PID <positive-decimal-pid> /T /F`. The driver authenticates the supported
+host's exact `C:\Windows` root and absolute System32 executable path, uses
+`shell: false`, and performs no `PATH` lookup, environment expansion, alternate
 system-directory substitution, or caller-supplied executable selection.
 
-**Selected future contract:** The supervisor accepts only the positive integer
+**Currently implemented boundary:** The supervisor accepts only the positive integer
 PID captured directly from a child that the current supervisor created. No
 public or internal caller may supply a PID. It rejects PID `0`, the current
 process PID, the parent process PID, a child for which exit has already been
@@ -2823,13 +2925,13 @@ observed, and any PID not in the current invocation's task-owned child record.
 It never intentionally targets a caller, the supervisor, its parent, or an
 unrelated process.
 
-**Selected future contract:** The taskkill attempt:
+**Currently implemented boundary:** The taskkill attempt:
 
 - occurs only after a timeout, output overflow, or exit-without-close state
   enters termination handling and only while the required task-owned PID
   evidence remains usable;
-- uses a dedicated nonrecursive wrapper, never the same supervisor that is
-  being repaired;
+- uses a dedicated nonrecursive wrapper, never the supervised subprocess
+  implementation whose task is being terminated;
 - has one 10,000 ms execution bound and independent fixed 2 MiB stdout and
   stderr bounds;
 - never exposes, incorporates, or logs taskkill stdout or stderr;
@@ -2847,7 +2949,7 @@ exit-without-close disposition, the supervisor must not dispatch taskkill to a
 possibly reusable PID. It may use only the remaining fixed post-termination
 grace to obtain stream closure; otherwise termination is unconfirmed.
 
-**Selected policy consequence:** A failed taskkill wrapper records
+**Currently implemented consequence:** A failed taskkill wrapper records
 `SUBPROCESS_TERMINATION_TOOL_FAILED`. A completed bounded wrapper without all
 required original-child exit, stream-completion, and close evidence records
 `SUBPROCESS_TERMINATION_NOT_CONFIRMED`; so does safe non-dispatch followed by a
@@ -2866,62 +2968,297 @@ proof that the original child exited or that its streams closed.
 
 ## 80. Selected cleanup, lock, and lease consequences
 
-**Selected future contract:**
-`MOXLEY_NATIVE_BUILD_SUBPROCESS_TERMINATION_UNCONFIRMED` fails closed and
-creates no new cleanup authority:
+**Observed current mismatch:** At baseline
+`d467771ad42b314f28af22ed01b4769be946b700`, the v1 lock has exactly its six
+existing fields and no persistent disposition. A termination-unconfirmed build
+closes the cooperating lease and throws while preserving generated evidence.
+Current clean can then treat one unsuccessful pipe connection as sufficient to
+continue to authenticated removal. That behavior implements neither the
+carrier nor the cleanup authority selected in this section.
 
-- before lease or lock acquisition, it creates no authority to remove or
-  mutate repository state;
-- after lock acquisition, it preserves the lock and every authenticated staging
-  path or staging artifact that exists;
-- at or after the first promotion, it preserves the lock, staging, binary, and
-  receipt evidence, including incomplete or mismatched subsets; and
-- at every phase, it prohibits deletion, overwrite, rollback, retry, resume,
-  automatic clean, or success reporting.
+**Selected future contract — pre-lock failure:** Before successful acquisition
+of the owned v2 lock, termination-unconfirmed returns its original failure and
+creates no sidecar, cleanup authority, or repository mutation. Only a failure
+after lock acquisition may attempt a sidecar bound to that exact lock.
 
-The ordinary pre-promotion handled-failure cleanup path in section 63 must not
-run for termination-unconfirmed. The build lease remains open while the build
-process is alive. Process exit closes that lease but does not prove every
-descendant or inherited handle absent.
+**Selected future contract — carrier and path identity:** The persistent carrier
+is exactly this pair under the authenticated fixed `build/Release` directory:
 
-**Selected future contract:** Explicit clean must refuse after termination-
-unconfirmed until an operator independently proves that no task-owned build,
-compiler, linker, probe, authentication, or termination process remains active.
-The current one-time named-pipe absence check is insufficient for that state.
-PID absence alone is not cleanup authority because identifiers are reusable and
-the available ancestry evidence is incomplete.
+```text
+build/Release/.moxley-windows-reparse-build.lock
+build/Release/.moxley-windows-reparse-build.disposition.json
+```
 
-No automatic stale-lock expiry, PID-age inference, reboot inference, background
-repair, rollback, retry, or resume is selected. If independent proof is not
-available, the lock and all authenticated evidence remain preserved for
-operator investigation.
+The immutable v2 `ACTIVE` lock is the primary fail-closed gate. The optional
+write-once sidecar contains one terminal disposition; it never replaces or
+mutates the lock. The sidecar is lock-adjacent rather than staging-relative
+because termination can become unconfirmed while the newly created lock is
+being authenticated, before staging exists. Its copied `stagingName` binds the
+planned generation and does not assert that the directory was created. A new
+build must collision-fail without adoption or mutation if either fixed carrier
+path already exists. An orphan sidecar never authorizes cleanup.
+
+**Selected future contract — exact v2 lock:** New builds create a record with
+exactly this key order and logical shape:
+
+```json
+{
+  "lockFormat": "moxley-native-build-lock",
+  "lockVersion": 2,
+  "repositoryKey": "<64 lowercase hex>",
+  "pipeName": "\\\\.\\pipe\\moxley-native-build-<first 32 repositoryKey hex>",
+  "stagingName": ".moxley-windows-reparse-stage-<32 lowercase hex>",
+  "nonce": "<32 lowercase hex>",
+  "disposition": "ACTIVE"
+}
+```
+
+The pipe name must equal the deterministic package-root pipe name. The staging
+name and nonce have the displayed fixed lowercase-hex widths. No key may be
+missing, additional, or reordered. The lock remains `ACTIVE` and byte-immutable
+for its entire lifetime; no terminal state is appended or written into it.
+
+**Selected future contract — exact terminal sidecar:** The sidecar has exactly
+this key order. An ordinary settled failure eligible for later explicit clean
+uses:
+
+```json
+{
+  "dispositionFormat": "moxley-native-build-disposition",
+  "dispositionVersion": 1,
+  "lockVersion": 2,
+  "repositoryKey": "<exact lock repositoryKey>",
+  "pipeName": "<exact lock pipeName>",
+  "stagingName": "<exact lock stagingName>",
+  "nonce": "<exact lock nonce>",
+  "disposition": "CLEAN_AUTHORIZED",
+  "reason": null,
+  "causeReason": null
+}
+```
+
+Termination-unconfirmed instead uses the same exact keys with this terminal
+shape:
+
+```json
+{
+  "dispositionFormat": "moxley-native-build-disposition",
+  "dispositionVersion": 1,
+  "lockVersion": 2,
+  "repositoryKey": "<exact lock repositoryKey>",
+  "pipeName": "<exact lock pipeName>",
+  "stagingName": "<exact lock stagingName>",
+  "nonce": "<exact lock nonce>",
+  "disposition": "TERMINATION_UNCONFIRMED",
+  "reason": "SUBPROCESS_TERMINATION_NOT_CONFIRMED",
+  "causeReason": "SUBPROCESS_EXIT_WITHOUT_CLOSE"
+}
+```
+
+For `TERMINATION_UNCONFIRMED`, `reason` is exactly
+`SUBPROCESS_TERMINATION_TOOL_FAILED` or
+`SUBPROCESS_TERMINATION_NOT_CONFIRMED`. `causeReason` is JSON `null` or exactly
+one of `SUBPROCESS_TIMEOUT`, `SUBPROCESS_STDOUT_LIMIT`,
+`SUBPROCESS_STDERR_LIMIT`, or `SUBPROCESS_EXIT_WITHOUT_CLOSE`. The `reason` and
+`causeReason` keys are mandatory even when their value is `null`. There is no
+`ACTIVE` sidecar. The sidecar may not contain a PID, timestamp, username,
+hostname, absolute path, process inventory, retry count, operator assertion,
+command, environment value, stdout, stderr, or arbitrary diagnostic string.
+
+**Selected future contract — exact bytes:** Each file independently contains
+1 through 2,048 bytes inclusive and uses strict UTF-8 without a BOM, compact
+`JSON.stringify` encoding in the prescribed key order, and exactly one final
+LF. CR, embedded or additional LF, whitespace padding, alternate key order,
+unknown fields, and trailing bytes are invalid. Parsing and canonical
+re-encoding with the final LF must reproduce the original bytes exactly. The
+2,048-byte bound does not admit any noncanonical alternative.
+
+**Selected future contract — monotonic write protocol:** The later
+implementation must:
+
+1. Require the fixed sidecar path absent, start the cooperating lease, and keep
+   it open through every carrier-persistence attempt.
+2. Exclusively create the v2 lock with `open(..., "wx", 0o600)`, write its
+   complete canonical buffer, call `FileHandle.sync()`, close it, authenticate
+   its type and identity, read it back, decode it, and require exact-byte
+   equality before normal build work continues.
+3. Recheck that the fixed sidecar remains absent after lock acquisition. A
+   collision preserves the new lock and all pre-existing evidence and fails
+   without overwrite or adoption.
+4. After every cleanup-permitting predicate is final, exclusively create one
+   terminal sidecar with `wx`; write canonical bytes, call `sync`, close,
+   authenticate type and identity, read back, bind every copied field to the
+   exact lock, and require exact-byte equality.
+5. Use a nonrecursive carrier writer and authenticator. Persisting supervision-
+   failure evidence must not invoke the same supervised subprocess machinery
+   and recursively attempt another terminal disposition.
+6. Never retry, append, truncate, rename, overwrite, replace, migrate, repair,
+   or delete a failed carrier write. Close the lease only after the complete
+   terminal-record attempt finishes.
+
+`CLEAN_AUTHORIZED` may be opened only after every relevant supervised process
+has reached an ordinary confirmed terminal result and no later supervised action
+can change that conclusion. Before opening it, the build must complete every
+subprocess-based path, reparse, identity, and inventory check needed for its own
+cleanup. Build-owned cleanup after the positive record may use only the already
+authenticated identities and nonrecursive local checks; it must not launch
+another supervised process. If those predicates cannot be completed first, the
+build retains `ACTIVE` rather than writing positive authority.
+`TERMINATION_UNCONFIRMED` is the only sidecar state permitted after unconfirmed
+termination. A successful build creates no sidecar. Clean and operators never
+create, rewrite, upgrade, or repair either carrier file.
+
+**Selected future contract — writer uncertainty:** If sidecar create, write,
+`sync`, close, authentication, or readback fails, the failing build acts as
+`ACTIVE`: it retains the lock, every zero-length, partial, complete, or invalid
+sidecar subset, staging, binary, receipt, and every incomplete combination;
+performs no rollback, retry, rewrite, or deletion; preserves the original
+caller-visible build error; and does not claim that terminal evidence persisted.
+
+**Selected future contract — byte-authoritative positive publication:** A direct
+final-path `wx` write can leave complete canonical `CLEAN_AUTHORIZED` bytes even
+when the writer subsequently reports `sync`, close, authentication, or readback
+failure. The failing build still acts as `ACTIVE`, preserves all state, returns
+its original error, and makes no claim that terminal evidence persisted. A later
+clean independently classifies the retained bytes: a complete canonical,
+authenticated, and exactly lock-bound `CLEAN_AUTHORIZED` sidecar is terminal
+cleanup authority even if the writer did not observe final acknowledgement.
+This is safe only because every cleanup-permitting predicate is final before the
+positive sidecar is opened. Missing, zero-length, partial, noncanonical, unknown,
+identity-changed, or unbound bytes remain `ACTIVE` and non-authorizing. No
+additional carrier, commit bit, schema field, rename, or lock mutation is
+selected.
+
+**Selected future contract — legacy v1:** Every exact valid v1 lock remains
+legacy indeterminate evidence. It is never migrated, rewritten, relabeled,
+adopted, or inferred from pipe or PID absence, process inventory, age,
+timestamps, staging or output shape, reboot, or current tests. A sidecar cannot
+upgrade a v1 lock; after safety authentication, v1 classification returns the
+retention-required result and preserves any accompanying sidecar. An unknown or
+malformed lock version retains the existing lock-invalid behavior and preserves
+all evidence.
+
+**Selected future contract — clean precedence and identities:** Existing root,
+fixed-path, non-following type, containment, size, lock, staging, inventory, and
+identity safety authentication occurs without mutation and retains its existing
+errors. After that safety boundary:
+
+1. A successful connection to the deterministic cooperating lease returns the
+   existing code `MOXLEY_NATIVE_CLEAN_BUSY` and message
+   `An active cooperating native build exists.`
+2. With no live lease, an exact v1 lock with or without an accompanying
+   sidecar, v2 `ACTIVE` with the sidecar absent, or valid v2
+   `TERMINATION_UNCONFIRMED` returns
+   `MOXLEY_NATIVE_CLEAN_RETENTION_REQUIRED` with message
+   `Native build evidence requires retention; clean removal is not authorized.`
+3. For v2 or a missing lock, a malformed, partial, noncanonical, unknown,
+   orphaned, or lock-unbound sidecar returns
+   `MOXLEY_NATIVE_CLEAN_DISPOSITION_INVALID` with message
+   `Native build disposition evidence is invalid.` Existing unsafe-path, type,
+   reparse, or identity-change failures keep their existing safety errors.
+4. Only an exact authenticated and lock-bound v2 `CLEAN_AUTHORIZED` sidecar may
+   enter removal.
+
+A sidecar without a lock is disposition-invalid. No lock, sidecar, or staging
+retains existing idempotent clean success. Existing exact lockless successful
+binary/receipt cleanup remains available. Pipe absence means only that no
+cooperating listener answered once; it never supplies positive authority.
+
+**Selected future contract — exact authorized removal:** For an exact
+`CLEAN_AUTHORIZED` pair only, clean reauthenticates every removal identity and
+then physically removes the authenticated staging contents and staging
+directory, final binary if present, final receipt if present, disposition
+sidecar, and lock last. It verifies every target absent, stops at the first
+failure, and neither rolls back nor recreates evidence. Sorted user-visible
+removal reporting does not change physical deletion order.
+
+Failure before sidecar removal leaves the positive terminal record available
+for another explicit attempt. Failure after sidecar removal but before lock
+removal leaves v2 `ACTIVE` without terminal authority and therefore requires
+indefinite retention. This intentional fail-closed interruption boundary is not
+resume or crash recovery.
+
+**Selected future contract — no operator-proof interface:**
+The selected operator-proof or cleanup-authorization interface is exactly:
+
+```text
+NONE_IN_THIS_CONTRACT
+```
+
+`clean:native:windows` remains zero-argument. No force or confirmation flag,
+environment variable, prompt, token, nonce echo, PID or process list, elapsed-
+time threshold, reboot acknowledgement, alternative package script, or human
+assertion grants cleanup authority. Read-only investigation may inventory, hash,
+or forensically copy retained evidence, but cannot mutate its disposition or
+authorize removal.
+
+**Selected future contract — indefinite retention and crash behavior:** The
+exact future outcomes are:
+
+| Retained state | Build or explicit-clean result |
+| --- | --- |
+| Live cooperating lease | Existing `MOXLEY_NATIVE_CLEAN_BUSY`; preserve everything. |
+| Ordinary pre-promotion handled failure after v2 lock acquisition | Persist and verify `CLEAN_AUTHORIZED` before build-owned cleanup; on success remove staging, sidecar, and lock in the authorized order. |
+| Ordinary post-promotion settled failure | Persist `CLEAN_AUTHORIZED`, close the lease after the attempt, and preserve the exact carrier and generated state for explicit clean. |
+| Termination-unconfirmed before v2 lock acquisition | Return the original failure; create no sidecar, cleanup authority, or repository mutation. |
+| Termination-unconfirmed after v2 lock acquisition | Attempt only `TERMINATION_UNCONFIRMED` while the lease remains open; close the lease after the attempt, return the original termination-unconfirmed error, and retain everything indefinitely. |
+| Crash or killed parent with v2 `ACTIVE` | `MOXLEY_NATIVE_CLEAN_RETENTION_REQUIRED`; pipe absence does not reclassify it. |
+| Exact valid v1 lock | `MOXLEY_NATIVE_CLEAN_RETENTION_REQUIRED`; no migration or inference. |
+| Torn, unknown, orphaned, or unbound sidecar | `MOXLEY_NATIVE_CLEAN_DISPOSITION_INVALID`; preserve every byte and target. |
+| Exact v2 `CLEAN_AUTHORIZED` pair | Eligible only for the exact authenticated removal sequence above. |
+| No lock, staging, or sidecar | Existing idempotent clean behavior remains. |
+| Successful verified output with no lock | Existing exact authenticated explicit clean remains available. |
+
+For every retention-required or disposition-invalid state, preserve the lock,
+sidecar bytes, staging, binary, receipt, and incomplete subsets across parent
+exit, shell restart, elapsed time, and reboot. Subsequent build remains
+collision-failing. No retry, resume, promotion, adoption, rollback, automatic
+clean, background repair, stale-lock expiry, or Moxley deletion command is
+selected. A future recovery design requires separate authority.
+
+**Compatibility and explicit nonclaims:** This deliberately tightens v1 and
+crash-retained cleanup behavior. Old build code sees a v2 lock collision; old
+clean rejects v2 as invalid; new clean retains v1; no mixed-version path silently
+deletes or migrates evidence. Successful no-lock clean and already-absent
+idempotence remain compatible. The records are private ignored build evidence,
+not public API or persisted database format.
+
+Exclusive `wx` creation is write-once collision behavior, not atomic
+publication. `FileHandle.sync()`, close, authentication, and exact readback do
+not establish a multi-file transaction, parent-directory or power-loss
+durability, crash consistency, external acknowledgement, arbitrary descendant
+or inherited-handle absence, hostile-local-user resistance, nonce secrecy,
+cryptographic authenticity, or pathname/handle-relative TOCTOU resistance.
+Neither taskkill, exit, close, pipe or PID absence, nor a disposition sidecar is
+general process-tree proof. Retention does not make a binary valid, loadable,
+adoptable, resumable, or production-qualified and does not implement rollback,
+recovery, durability, traversal, persistence, database locking, a loader, PR
+#28, an adapter, Thoth integration, release, or publication.
 
 ## 81. Selected native-build and loader test-harness policy
 
-**Observed fact:** The current native-build harness and the blocked PR #28
-loader harness each use a separate 120,000 ms, 1 MiB-per-stream, direct-child-
-kill supervisor that waits for `close`. Neither supplies tree termination or a
-closed local timeout reason, and either can expose `code: null` without an exact
-local disposition. Their cleanup paths do not first perform the complete
-timeout inventory selected here.
+**Currently implemented boundary:** The native-build harness uses the repaired
+bounded supervisor semantics and a 300,000 ms outer process bound. It reports
+the closed private codes and reasons from sections 76 through 79 rather than an
+unexplained `code: null`. The focused subprocess suite is 6/6 and the focused
+native build/clean lifecycle suite is 10/10.
 
-**Selected future contract:** Both harnesses must use the repaired bounded
-supervisor semantics or an independently equivalent implementation. Their
-outer execution bound is 300,000 ms. Each harness must report an exact local
-code and closed reason for spawn failure, execution timeout, stdout or stderr
-overflow, nonzero exit, signal exit, and termination unconfirmed. It must never
-expose an unexplained code `null` as the only failure evidence.
+**Blocked-candidate evidence:** The unchanged PR #28 loader harness still uses
+its separate historical 120,000 ms, 1 MiB-per-stream, direct-child-kill wrapper
+that waits for `close`. This document does not amend that candidate or treat its
+harness as repaired.
 
-Harness timeout failure must not automatically invoke clean. Before any clean
-decision, the harness must inventory the exact lock, deterministic pipe,
-generated binary and receipt, authenticated staging, and task-owned build,
-compiler, linker, probe, authentication, and termination-process evidence. A
-termination-unconfirmed inventory follows section 80 and preserves evidence.
+**Selected future contract:** Harness timeout failure must not automatically
+invoke clean. Before any clean decision, the harness must inventory the exact
+lock, fixed disposition sidecar, deterministic pipe, generated binary and
+receipt, authenticated staging, and task-owned build, compiler, linker, probe,
+authentication, and termination-process evidence. That inventory is read-only
+investigation and never cleanup authority. Termination-unconfirmed follows
+section 80 and preserves evidence.
 
-**Blocked-candidate boundary:** This document does not amend PR #28's loader or
-harness. Only after the build-supervisor repair is independently reviewed and
-merged may PR #28 be rebased and its harness changed to consume repaired or
-independently equivalent supervision behavior.
+**Blocked-candidate boundary:** Only after the section 80 disposition/clean
+repair is independently reviewed and merged may PR #28 be rebased and its
+harness changed to consume the repaired behavior.
 
 ## 82. Subprocess-supervision candidate comparison
 
@@ -2935,8 +3272,10 @@ independently equivalent supervision behavior.
 4. **Retry authentication or build — rejected.** It weakens deterministic
    one-shot behavior.
 5. **Use taskkill tree termination plus bounded exit/close confirmation and
-   fail closed when confirmation is unavailable — selected source-free Windows
-   policy.** This is the disposition selected in sections 77 through 81.
+   fail closed when confirmation is unavailable — implemented source-free
+   Windows subprocess policy.** PR #31 implements the bounded supervision in
+   sections 77 through 79. Its persistent cleanup consequence remains the
+   selected but unimplemented section 80 contract.
 6. **Introduce a native Job Object supervisor — deferred.** It creates a
    bootstrap/build dependency and requires a separate native contract.
 7. **Accept cooperative subprocess behavior without qualification — rejected
@@ -2945,21 +3284,26 @@ independently equivalent supervision behavior.
 
 ## 83. Documentation boundary and continuing no-go
 
-**Currently implemented boundary:** This documentation slice adds zero tests
+**Documentation-only Phase C boundary:** This documentation slice adds zero tests
 and changes only `STATE_COMPATIBILITY.md`. It changes no source, test, fixture,
 other document, manifest, lockfile, dependency, package version, generated
-output, build receipt, or public API. The package remains `moxley-db@3.1.1`
-under Apache-2.0 with its existing dependency graph.
+output, build receipt, disposition carrier, or public API. The package remains
+`moxley-db@3.1.1` under Apache-2.0 with its existing dependency graph. Test
+counts remain subprocess 6/6, lifecycle 10/10, and full suite 66/66; those are
+preservation baselines and do not test unimplemented section 80 behavior.
 
-**Selected future contract:** Sections 76 through 82 define the repair policy;
-they do not implement it. Fact, document-supported inference, selected policy,
-ambiguity, and explicit nonclaim remain separately labeled. No observation or
-primary-source statement is silently promoted into a stronger process-tree,
+**Implemented-versus-selected boundary:** PR #31 implements sections 76 through
+79's private bounded subprocess supervision. Section 80's v2 lock, terminal
+sidecar, byte-authoritative positive publication, denial states, and retention
+rules remain selected future behavior. None of the section 80 enforcement is
+implemented. Fact, document-supported inference, selected policy, ambiguity,
+and explicit nonclaim remain separately labeled. No observation or primary-
+source statement is silently promoted into a stronger process-tree,
 termination, handle-lifetime, timing, cleanup, or PR #28 causation guarantee.
 
 **Explicit nonclaim:** The complete Windows version-1 qualification remains
-**no-go**. This documentation does not authorize or claim repaired subprocess
-supervision, a merged private loader, production traversal, persisted-state
+**no-go**. This documentation does not authorize or claim implemented section
+80 enforcement, a merged private loader, production traversal, persisted-state
 acceptance, TOCTOU resistance, hostile-local-user resistance, distribution,
 release, npm publication, database locking, atomicity, rollback, recovery,
 durability, acknowledgement, migration, adapter behavior, or Thoth behavior.
