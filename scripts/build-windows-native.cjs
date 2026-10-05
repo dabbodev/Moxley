@@ -17,8 +17,11 @@ const RECEIPT_RELATIVE =
   'build/Release/moxley-windows-reparse.receipt.json';
 const LOCK_RELATIVE =
   'build/Release/.moxley-windows-reparse-build.lock';
+const DISPOSITION_RELATIVE =
+  'build/Release/.moxley-windows-reparse-build.disposition.json';
 const STAGING_PREFIX = '.moxley-windows-reparse-stage-';
 const LOCK_FORMAT = 'moxley-native-build-lock';
+const DISPOSITION_FORMAT = 'moxley-native-build-disposition';
 const RECEIPT_FORMAT = 'moxley-native-build-receipt';
 const BUILD_TOOLS_VERSION = '17.14.37516.0';
 const MSVC_VERSION = '14.44.35207';
@@ -77,11 +80,20 @@ const REQUIRED_NODE_HEADERS = Object.freeze([
 const PROCESS_TIMEOUT_MS = 30_000;
 const AUTHENTICATION_TIMEOUT_MS = 90_000;
 const PROBE_TIMEOUT_MS = 10_000;
+const LEASE_CLOSE_TIMEOUT_MS = 5_000;
 const EXIT_CLOSE_GRACE_MS = 5_000;
 const TASKKILL_TIMEOUT_MS = 10_000;
 const POST_TERMINATION_GRACE_MS = 5_000;
+const EXPECTED_HOST = Object.freeze({
+  caption: 'Microsoft Windows 11 Home',
+  displayVersion: '25H2',
+  build: '26200.9457',
+  driveType: 'Fixed',
+  driveFormat: 'NTFS',
+});
 const MAX_PROCESS_OUTPUT_BYTES = 2 * 1024 * 1024;
 const MAX_JSON_BYTES = 16 * 1024;
+const MAX_CARRIER_BYTES = 2048;
 const SUBPROCESS_MESSAGES = Object.freeze({
   MOXLEY_NATIVE_BUILD_SUBPROCESS_SPAWN_FAILED:
     'Native build subprocess could not be spawned.',
@@ -106,8 +118,131 @@ const SUBPROCESS_REASONS = Object.freeze({
   TERMINATION_NOT_CONFIRMED: 'SUBPROCESS_TERMINATION_NOT_CONFIRMED',
 });
 const TEST_CONTROL_TOKEN = Symbol('moxley-native-subprocess-test-control');
+const CARRIER_TEST_CONTROL_TOKEN = Symbol('moxley-native-carrier-test-control');
+const TERMINAL_CARRIER_TEST_CONTROL = Symbol(
+  'moxley-native-terminal-carrier-test-control',
+);
+const DIAGNOSTIC_CONTROL_TOKEN = Symbol(
+  'moxley-native-d1-diagnostic-control',
+);
+const RETENTION_PLAN_TEST_ERROR = Symbol('moxley-native-retention-plan-test-error');
+const STAGING_AUTH_TEST_ERROR = Symbol('moxley-native-staging-auth-test-error');
+const DIAGNOSTIC_CONTROL_STATES = new WeakMap();
+const SUPERVISOR_FAILURE_SNAPSHOTS = new WeakMap();
 const HEX_32 = /^[0-9a-f]{32}$/;
 const HEX_64 = /^[0-9a-f]{64}$/;
+const MAX_DIAGNOSTIC_RECORD_BYTES = 1024;
+const MAX_DIAGNOSTIC_RECORDS = 128;
+const MAX_DIAGNOSTIC_OUTPUT_BYTES = 128 * 1024;
+const MAX_ACTIVE_TYPES = 16;
+const MAX_ACTIVE_OBJECTS = 64;
+const DIAGNOSTIC_RECORD_KEYS = Object.freeze([
+  'format',
+  'version',
+  'runId',
+  'sequence',
+  'phase',
+  'elapsedMs',
+  'detail',
+]);
+const DIAGNOSTIC_PHASES = Object.freeze([
+  'RECEIPT_DONE',
+  'STAGING_AUTH_2_BEGIN',
+  'STAGING_ROOT_BEGIN',
+  'STAGING_ROOT_DONE',
+  'STAGING_READDIR_DONE',
+  'STAGING_ENTRY_BEGIN',
+  'STAGING_ENTRY_DONE',
+  'STAGING_AUTH_2_DONE',
+  'RECEIPT_VALIDATED',
+  'DEFERRAL_CALLED',
+  'DEFERRAL_ARTIFACT_ABSENT',
+  'DEFERRAL_RECEIPT_ABSENT',
+  'DEFERRAL_THROW',
+  'RUNBUILD_CATCH_ENTERED',
+  'RETENTION_BEGIN',
+  'RETENTION_STAGING_DONE',
+  'LOCK_AUTH_DONE',
+  'LOCK_READBACK_DONE',
+  'RETENTION_DISPOSITION_ABSENT',
+  'RETENTION_ARTIFACT_ABSENT',
+  'RETENTION_RECEIPT_ABSENT',
+  'RETENTION_PREPARED',
+  'DISPOSITION_BEGIN',
+  'DISPOSITION_CREATE_DONE',
+  'DISPOSITION_WRITE_DONE',
+  'DISPOSITION_SYNC_DONE',
+  'DISPOSITION_CLOSE_DONE',
+  'DISPOSITION_AUTHENTICATE_DONE',
+  'DISPOSITION_READBACK_DONE',
+  'DISPOSITION_ACKNOWLEDGED',
+  'LEASE_CLOSE_BEGIN',
+  'LEASE_CLOSE_DONE',
+  'LEASE_CLOSE_REJECTED',
+  'LEASE_CLOSE_TIMEOUT',
+  'LEASE_ABANDON_CALLED',
+  'ORIGINAL_ERROR_RETHROWN',
+  'RUNBUILD_SETTLED_FULFILLED',
+  'RUNBUILD_SETTLED_REJECTED',
+  'POST_SETTLEMENT_HANDLES',
+  'EXIT_CODE_SET',
+]);
+const SUPERVISOR_SNAPSHOT_KEYS = Object.freeze([
+  'stdout',
+  'stderr',
+  'exitCode',
+  'signal',
+  'stdoutOverflowed',
+  'stderrOverflowed',
+  'stdoutCompleted',
+  'stderrCompleted',
+  'exitObserved',
+  'closeObserved',
+  'terminationConfirmed',
+  'captureComplete',
+]);
+const LOCK_V2_KEYS = Object.freeze([
+  'lockFormat',
+  'lockVersion',
+  'repositoryKey',
+  'pipeName',
+  'stagingName',
+  'nonce',
+  'disposition',
+]);
+const DISPOSITION_KEYS = Object.freeze([
+  'dispositionFormat',
+  'dispositionVersion',
+  'lockVersion',
+  'repositoryKey',
+  'pipeName',
+  'stagingName',
+  'nonce',
+  'disposition',
+  'reason',
+  'causeReason',
+]);
+const TERMINATION_DISPOSITION_REASONS = Object.freeze([
+  'SUBPROCESS_TERMINATION_TOOL_FAILED',
+  'SUBPROCESS_TERMINATION_NOT_CONFIRMED',
+]);
+const TERMINATION_DISPOSITION_CAUSES = Object.freeze([
+  null,
+  'SUBPROCESS_TIMEOUT',
+  'SUBPROCESS_STDOUT_LIMIT',
+  'SUBPROCESS_STDERR_LIMIT',
+  'SUBPROCESS_EXIT_WITHOUT_CLOSE',
+]);
+const CARRIER_FAULTS = Object.freeze([
+  'none',
+  'create',
+  'write-zero',
+  'write-partial',
+  'sync',
+  'close',
+  'authentication',
+  'readback',
+]);
 const EXPECTED_RESULT_KEYS = Object.freeze([
   'outcome',
   'fileAttributes',
@@ -207,6 +342,20 @@ function buildError(code, message) {
   return new NativeBuildError(code, message);
 }
 
+function physicalCleanupDeferredError() {
+  return buildError(
+    'MOXLEY_NATIVE_BUILD_PHYSICAL_CLEANUP_DEFERRED',
+    'Secure physical cleanup is unavailable; native build state was retained.',
+  );
+}
+
+function leaseCloseTimedOutError() {
+  return buildError(
+    'MOXLEY_NATIVE_BUILD_LEASE_CLOSE_TIMED_OUT',
+    'Native build lease close timed out.',
+  );
+}
+
 function subprocessBuildError(
   code,
   reason,
@@ -296,6 +445,424 @@ function exactKeys(value, keys) {
     typeof value === 'object' &&
     !Array.isArray(value) &&
     JSON.stringify(Object.keys(value)) === JSON.stringify(keys)
+  );
+}
+
+function diagnosticEvidenceError() {
+  return buildError(
+    'MOXLEY_NATIVE_BUILD_DIAGNOSTIC_EVIDENCE_INVALID',
+    'Private native build diagnostic evidence is invalid.',
+  );
+}
+
+function validateActiveSummary(summary) {
+  if (!Array.isArray(summary) || summary.length > MAX_ACTIVE_TYPES) {
+    throw diagnosticEvidenceError();
+  }
+  const accepted = [];
+  let total = 0;
+  let previous = null;
+  for (const entry of summary) {
+    if (
+      !exactKeys(entry, ['type', 'count']) ||
+      typeof entry.type !== 'string' ||
+      !/^[A-Za-z][A-Za-z0-9]{0,31}$/.test(entry.type) ||
+      !Number.isSafeInteger(entry.count) ||
+      entry.count <= 0 ||
+      (previous !== null && ordinalCompare(previous, entry.type) >= 0)
+    ) {
+      throw diagnosticEvidenceError();
+    }
+    total += entry.count;
+    if (total > MAX_ACTIVE_OBJECTS) throw diagnosticEvidenceError();
+    accepted.push(Object.freeze({ type: entry.type, count: entry.count }));
+    previous = entry.type;
+  }
+  return Object.freeze(accepted);
+}
+
+function sanitizedActiveType(value) {
+  if (
+    value === null ||
+    (typeof value !== 'object' && typeof value !== 'function')
+  ) {
+    throw diagnosticEvidenceError();
+  }
+  let prototype = Object.getPrototypeOf(value);
+  let constructorValue = null;
+  while (prototype !== null && constructorValue === null) {
+    const descriptor = Object.getOwnPropertyDescriptor(
+      prototype,
+      'constructor',
+    );
+    if (descriptor !== undefined) {
+      if (
+        !Object.hasOwn(descriptor, 'value') ||
+        typeof descriptor.value !== 'function'
+      ) {
+        throw diagnosticEvidenceError();
+      }
+      constructorValue = descriptor.value;
+      break;
+    }
+    prototype = Object.getPrototypeOf(prototype);
+  }
+  if (constructorValue === null) throw diagnosticEvidenceError();
+  const nameDescriptor = Object.getOwnPropertyDescriptor(
+    constructorValue,
+    'name',
+  );
+  const type = nameDescriptor?.value;
+  if (
+    typeof type !== 'string' ||
+    !/^[A-Za-z][A-Za-z0-9]{0,31}$/.test(type)
+  ) {
+    throw diagnosticEvidenceError();
+  }
+  return type;
+}
+
+function sanitizeActiveObjects(objects) {
+  if (!Array.isArray(objects) || objects.length > MAX_ACTIVE_OBJECTS) {
+    throw diagnosticEvidenceError();
+  }
+  const counts = new Map();
+  for (const object of objects) {
+    const type = sanitizedActiveType(object);
+    counts.set(type, (counts.get(type) ?? 0) + 1);
+  }
+  if (counts.size > MAX_ACTIVE_TYPES) throw diagnosticEvidenceError();
+  return validateActiveSummary(
+    [...counts.entries()]
+      .sort(([left], [right]) => ordinalCompare(left, right))
+      .map(([type, count]) => ({ type, count })),
+  );
+}
+
+function createActiveDeltaEvidence(baseline, after) {
+  const acceptedBaseline = validateActiveSummary(baseline);
+  const acceptedAfter = validateActiveSummary(after);
+  const baselineCounts = new Map(
+    acceptedBaseline.map((entry) => [entry.type, entry.count]),
+  );
+  const delta = [];
+  for (const entry of acceptedAfter) {
+    const count = entry.count - (baselineCounts.get(entry.type) ?? 0);
+    if (count > 0) delta.push({ type: entry.type, count });
+  }
+  return Object.freeze({
+    baseline: acceptedBaseline,
+    after: acceptedAfter,
+    delta: validateActiveSummary(delta),
+    overflow: false,
+  });
+}
+
+function validateActiveDeltaEvidence(value) {
+  if (
+    !exactKeys(value, ['baseline', 'after', 'delta', 'overflow']) ||
+    value.overflow !== false
+  ) {
+    throw diagnosticEvidenceError();
+  }
+  const accepted = createActiveDeltaEvidence(value.baseline, value.after);
+  if (JSON.stringify(accepted) !== JSON.stringify(value)) {
+    throw diagnosticEvidenceError();
+  }
+  return accepted;
+}
+
+function captureActiveEvidence() {
+  if (typeof process._getActiveHandles !== 'function') {
+    throw diagnosticEvidenceError();
+  }
+  const handles = sanitizeActiveObjects(process._getActiveHandles());
+  const requests = sanitizeActiveObjects(
+    typeof process._getActiveRequests === 'function'
+      ? process._getActiveRequests()
+      : [],
+  );
+  return Object.freeze({ handles, requests });
+}
+
+function compareActiveEvidence(baseline, after) {
+  if (
+    !exactKeys(baseline, ['handles', 'requests']) ||
+    !exactKeys(after, ['handles', 'requests'])
+  ) {
+    throw diagnosticEvidenceError();
+  }
+  return Object.freeze({
+    handles: createActiveDeltaEvidence(baseline.handles, after.handles),
+    requests: createActiveDeltaEvidence(
+      baseline.requests,
+      after.requests,
+    ),
+  });
+}
+
+function validateDiagnosticDetail(phase, detail) {
+  if (phase === 'STAGING_READDIR_DONE') {
+    if (
+      !exactKeys(detail, ['entryCount']) ||
+      !Number.isSafeInteger(detail.entryCount) ||
+      detail.entryCount < 0 ||
+      detail.entryCount > MAX_ACTIVE_OBJECTS
+    ) {
+      throw diagnosticEvidenceError();
+    }
+    return Object.freeze({ entryCount: detail.entryCount });
+  }
+  if (phase === 'STAGING_ENTRY_BEGIN' || phase === 'STAGING_ENTRY_DONE') {
+    if (
+      !exactKeys(detail, ['kind', 'ordinal']) ||
+      !['file', 'directory'].includes(detail.kind) ||
+      !Number.isSafeInteger(detail.ordinal) ||
+      detail.ordinal < 0 ||
+      detail.ordinal >= MAX_ACTIVE_OBJECTS
+    ) {
+      throw diagnosticEvidenceError();
+    }
+    return Object.freeze({ kind: detail.kind, ordinal: detail.ordinal });
+  }
+  if (phase === 'RUNBUILD_SETTLED_REJECTED') {
+    if (
+      !exactKeys(detail, ['code']) ||
+      typeof detail.code !== 'string' ||
+      !/^MOXLEY_[A-Z0-9_]{1,95}$/.test(detail.code)
+    ) {
+      throw diagnosticEvidenceError();
+    }
+    return Object.freeze({ code: detail.code });
+  }
+  if (phase === 'POST_SETTLEMENT_HANDLES') {
+    if (!exactKeys(detail, ['handles', 'requests'])) {
+      throw diagnosticEvidenceError();
+    }
+    return Object.freeze({
+      handles: validateActiveDeltaEvidence(detail.handles),
+      requests: validateActiveDeltaEvidence(detail.requests),
+    });
+  }
+  if (phase === 'EXIT_CODE_SET') {
+    if (!exactKeys(detail, ['value']) || detail.value !== 1) {
+      throw diagnosticEvidenceError();
+    }
+    return Object.freeze({ value: 1 });
+  }
+  if (detail !== null) throw diagnosticEvidenceError();
+  return null;
+}
+
+function validateDiagnosticRecord(record, runId, sequence) {
+  if (
+    !exactKeys(record, DIAGNOSTIC_RECORD_KEYS) ||
+    record.format !== 'moxley-d1-phase' ||
+    record.version !== 1 ||
+    record.runId !== runId ||
+    !HEX_32.test(record.runId) ||
+    record.sequence !== sequence ||
+    !Number.isSafeInteger(record.sequence) ||
+    record.sequence < 0 ||
+    !DIAGNOSTIC_PHASES.includes(record.phase) ||
+    !Number.isSafeInteger(record.elapsedMs) ||
+    record.elapsedMs < 0
+  ) {
+    throw diagnosticEvidenceError();
+  }
+  validateDiagnosticDetail(record.phase, record.detail);
+  return record;
+}
+
+function createDiagnosticControl(runId, writer = null) {
+  if (
+    typeof runId !== 'string' ||
+    !HEX_32.test(runId) ||
+    (writer !== null && typeof writer !== 'function')
+  ) {
+    throw diagnosticEvidenceError();
+  }
+  const control = Object.freeze({
+    token: DIAGNOSTIC_CONTROL_TOKEN,
+    runId,
+  });
+  DIAGNOSTIC_CONTROL_STATES.set(control, {
+    runId,
+    sequence: 0,
+    byteLength: 0,
+    started: process.hrtime.bigint(),
+    writer:
+      writer ??
+      ((bytes) => fs.writeSync(process.stdout.fd, bytes)),
+  });
+  return control;
+}
+
+function diagnosticControlState(control, allowNull = false) {
+  if (control === null && allowNull) return null;
+  const state =
+    control !== null && typeof control === 'object'
+      ? DIAGNOSTIC_CONTROL_STATES.get(control)
+      : undefined;
+  if (
+    state === undefined ||
+    control.token !== DIAGNOSTIC_CONTROL_TOKEN ||
+    control.runId !== state.runId ||
+    !exactKeys(control, ['token', 'runId']) ||
+    !Object.isFrozen(control)
+  ) {
+    throw diagnosticEvidenceError();
+  }
+  return state;
+}
+
+function emitDiagnosticPhase(control, phase, detail = null) {
+  if (control === null) return null;
+  const state = diagnosticControlState(control);
+  if (
+    state.sequence >= MAX_DIAGNOSTIC_RECORDS ||
+    !DIAGNOSTIC_PHASES.includes(phase)
+  ) {
+    throw diagnosticEvidenceError();
+  }
+  const elapsedNs = process.hrtime.bigint() - state.started;
+  const elapsedMs = Number(elapsedNs / 1_000_000n);
+  const record = {
+    format: 'moxley-d1-phase',
+    version: 1,
+    runId: state.runId,
+    sequence: state.sequence,
+    phase,
+    elapsedMs,
+    detail: validateDiagnosticDetail(phase, detail),
+  };
+  validateDiagnosticRecord(record, state.runId, state.sequence);
+  const bytes = Buffer.from(canonicalJson(record), 'utf8');
+  if (
+    bytes.includes(13) ||
+    bytes.length > MAX_DIAGNOSTIC_RECORD_BYTES ||
+    state.byteLength + bytes.length > MAX_DIAGNOSTIC_OUTPUT_BYTES
+  ) {
+    throw diagnosticEvidenceError();
+  }
+  let written;
+  try {
+    written = state.writer(bytes);
+  } catch {
+    throw diagnosticEvidenceError();
+  }
+  if (written !== bytes.length) throw diagnosticEvidenceError();
+  state.sequence += 1;
+  state.byteLength += bytes.length;
+  return Object.freeze({ ...record });
+}
+
+function parseDiagnosticPhaseStream(bytes, runId) {
+  if (
+    !Buffer.isBuffer(bytes) ||
+    bytes.length === 0 ||
+    bytes.length > MAX_DIAGNOSTIC_OUTPUT_BYTES ||
+    typeof runId !== 'string' ||
+    !HEX_32.test(runId) ||
+    bytes.includes(13) ||
+    bytes[bytes.length - 1] !== 10
+  ) {
+    throw diagnosticEvidenceError();
+  }
+  let text;
+  try {
+    text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    throw diagnosticEvidenceError();
+  }
+  const lines = text.slice(0, -1).split('\n');
+  if (
+    lines.length === 0 ||
+    lines.length > MAX_DIAGNOSTIC_RECORDS ||
+    lines.some((line) => line.length === 0)
+  ) {
+    throw diagnosticEvidenceError();
+  }
+  const records = [];
+  for (let sequence = 0; sequence < lines.length; sequence += 1) {
+    const lineBytes = Buffer.byteLength(`${lines[sequence]}\n`, 'utf8');
+    if (lineBytes > MAX_DIAGNOSTIC_RECORD_BYTES) {
+      throw diagnosticEvidenceError();
+    }
+    let record;
+    try {
+      record = JSON.parse(lines[sequence]);
+    } catch {
+      throw diagnosticEvidenceError();
+    }
+    validateDiagnosticRecord(record, runId, sequence);
+    if (canonicalJson(record) !== `${lines[sequence]}\n`) {
+      throw diagnosticEvidenceError();
+    }
+    records.push(Object.freeze(record));
+  }
+  return Object.freeze(records);
+}
+
+function validateSupervisorFailureSnapshot(snapshot) {
+  if (
+    !exactKeys(snapshot, SUPERVISOR_SNAPSHOT_KEYS) ||
+    !Buffer.isBuffer(snapshot.stdout) ||
+    !Buffer.isBuffer(snapshot.stderr) ||
+    snapshot.stdout.length > MAX_PROCESS_OUTPUT_BYTES ||
+    snapshot.stderr.length > MAX_PROCESS_OUTPUT_BYTES ||
+    !(
+      snapshot.exitCode === null ||
+      Number.isSafeInteger(snapshot.exitCode)
+    ) ||
+    !(
+      snapshot.signal === null ||
+      (typeof snapshot.signal === 'string' &&
+        /^[A-Z][A-Z0-9]{0,31}$/.test(snapshot.signal))
+    ) ||
+    ![
+      'stdoutOverflowed',
+      'stderrOverflowed',
+      'stdoutCompleted',
+      'stderrCompleted',
+      'exitObserved',
+      'closeObserved',
+      'terminationConfirmed',
+      'captureComplete',
+    ].every((key) => typeof snapshot[key] === 'boolean') ||
+    snapshot.captureComplete !==
+      (snapshot.stdoutCompleted &&
+        snapshot.stderrCompleted &&
+        snapshot.closeObserved)
+  ) {
+    throw diagnosticEvidenceError();
+  }
+  return Object.freeze({
+    stdout: Buffer.from(snapshot.stdout),
+    stderr: Buffer.from(snapshot.stderr),
+    exitCode: snapshot.exitCode,
+    signal: snapshot.signal,
+    stdoutOverflowed: snapshot.stdoutOverflowed,
+    stderrOverflowed: snapshot.stderrOverflowed,
+    stdoutCompleted: snapshot.stdoutCompleted,
+    stderrCompleted: snapshot.stderrCompleted,
+    exitObserved: snapshot.exitObserved,
+    closeObserved: snapshot.closeObserved,
+    terminationConfirmed: snapshot.terminationConfirmed,
+    captureComplete: snapshot.captureComplete,
+  });
+}
+
+function supervisorFailureSnapshot(error) {
+  if (
+    error === null ||
+    (typeof error !== 'object' && typeof error !== 'function') ||
+    !SUPERVISOR_FAILURE_SNAPSHOTS.has(error)
+  ) {
+    throw diagnosticEvidenceError();
+  }
+  return validateSupervisorFailureSnapshot(
+    SUPERVISOR_FAILURE_SNAPSHOTS.get(error),
   );
 }
 
@@ -571,6 +1138,9 @@ async function runProcess(file, arguments_, options = {}, testControl = null) {
     acceptedTestControl === null
       ? POST_TERMINATION_GRACE_MS
       : acceptedTestControl.postTerminationGraceMs;
+  const retainFailureOutput =
+    acceptedTestControl !== null &&
+    acceptedTestControl.retainFailureOutput === true;
 
   return new Promise((resolve, reject) => {
     let child = null;
@@ -656,6 +1226,28 @@ async function runProcess(file, arguments_, options = {}, testControl = null) {
       if (settled) return;
       settled = true;
       clearTimers();
+      if (retainFailureOutput) {
+        try {
+          const snapshot = validateSupervisorFailureSnapshot({
+            stdout: Buffer.concat(stdoutChunks, stdoutLength),
+            stderr: Buffer.concat(stderrChunks, stderrLength),
+            exitCode,
+            signal: exitSignal,
+            stdoutOverflowed,
+            stderrOverflowed,
+            stdoutCompleted,
+            stderrCompleted,
+            exitObserved,
+            closeObserved,
+            terminationConfirmed: error?.terminationConfirmed === true,
+            captureComplete:
+              stdoutCompleted && stderrCompleted && closeObserved,
+          });
+          SUPERVISOR_FAILURE_SNAPSHOTS.set(error, snapshot);
+        } catch {
+          error = diagnosticEvidenceError();
+        }
+      }
       releaseReferences(!closeObserved);
       reject(error);
     }
@@ -1032,10 +1624,12 @@ function testProcessInvocation(options = {}) {
   const postTerminationGraceMs = productionOptions.postTerminationGraceMs;
   const onTerminationAttempt = productionOptions.onTerminationAttempt;
   const signalAfterSpawn = productionOptions.signalAfterSpawn;
+  const retainFailureOutput = productionOptions.retainFailureOutput;
   delete productionOptions.exitCloseGraceMs;
   delete productionOptions.postTerminationGraceMs;
   delete productionOptions.onTerminationAttempt;
   delete productionOptions.signalAfterSpawn;
+  delete productionOptions.retainFailureOutput;
 
   function testGrace(value, fallback) {
     if (value === undefined) return fallback;
@@ -1063,6 +1657,15 @@ function testProcessInvocation(options = {}) {
       'Injected native build test scope is invalid.',
     );
   }
+  if (
+    retainFailureOutput !== undefined &&
+    retainFailureOutput !== true
+  ) {
+    throw buildError(
+      'MOXLEY_NATIVE_BUILD_TEST_SCOPE_INVALID',
+      'Injected native build test scope is invalid.',
+    );
+  }
 
   return Object.freeze({
     options: productionOptions,
@@ -1075,6 +1678,7 @@ function testProcessInvocation(options = {}) {
       ),
       onTerminationAttempt: onTerminationAttempt ?? null,
       signalAfterSpawn: signalAfterSpawn === true,
+      retainFailureOutput: retainFailureOutput === true,
     }),
   });
 }
@@ -1293,6 +1897,12 @@ async function assertAbsent(target, collision = false) {
   );
 }
 
+async function assertBuildCollisionPathsAbsent(paths) {
+  await assertAbsent(paths.disposition, true);
+  await assertAbsent(paths.artifact, true);
+  await assertAbsent(paths.receipt, true);
+}
+
 async function ensureOrdinaryDirectory(target, parent) {
   if (!isStrictDescendant(parent, target)) {
     throw buildError(
@@ -1313,6 +1923,164 @@ async function ensureOrdinaryDirectory(target, parent) {
   return authenticatePath(target, 'directory');
 }
 
+async function createOwnedStagingDirectory(state) {
+  const target = state.paths.staging;
+  if (!isStrictDescendant(state.paths.release, target)) {
+    throw buildError(
+      'MOXLEY_NATIVE_BUILD_STAGE_INVALID',
+      'Native build staging is outside the package boundary.',
+    );
+  }
+  try {
+    await fsp.mkdir(target, { recursive: false });
+  } catch {
+    state.stagingCreated = true;
+    state.stagingIdentity = null;
+    throw buildError(
+      'MOXLEY_NATIVE_BUILD_STAGE_INVALID',
+      'Native build staging could not be created without collision.',
+    );
+  }
+
+  state.stagingCreated = true;
+  let createdMetadata;
+  try {
+    createdMetadata = await fsp.lstat(target, { bigint: true });
+  } catch {
+    state.stagingIdentity = null;
+    throw buildError(
+      'MOXLEY_NATIVE_BUILD_STAGE_INVALID',
+      'Native build staging identity could not be recorded.',
+    );
+  }
+  if (!createdMetadata.isDirectory() || createdMetadata.isSymbolicLink()) {
+    state.stagingIdentity = null;
+    throw buildError(
+      'MOXLEY_NATIVE_BUILD_STAGE_INVALID',
+      'Native build staging has an unexpected type.',
+    );
+  }
+  state.stagingIdentity = identityOf(createdMetadata);
+
+  if (state[STAGING_AUTH_TEST_ERROR] instanceof NativeBuildError) {
+    const injected = state[STAGING_AUTH_TEST_ERROR];
+    state[STAGING_AUTH_TEST_ERROR] = null;
+    throw injected;
+  }
+
+  const authenticated = await authenticatePath(target, 'directory');
+  if (!sameIdentity(authenticated, state.stagingIdentity, false)) {
+    throw buildError(
+      'MOXLEY_NATIVE_BUILD_STAGE_INVALID',
+      'Native build staging identity changed.',
+    );
+  }
+  return authenticated;
+}
+
+async function localExistingMetadata(target) {
+  try {
+    return await fsp.lstat(target, { bigint: true });
+  } catch (error) {
+    if (error && error.code === 'ENOENT') return null;
+    throw buildError(
+      'MOXLEY_NATIVE_BUILD_PATH_INVALID',
+      'A native build path could not be authenticated.',
+    );
+  }
+}
+
+async function preflightBuildDirectories(canonicalRoot, paths) {
+  const rootMetadata = await fsp.lstat(canonicalRoot, { bigint: true });
+  if (!rootMetadata.isDirectory() || rootMetadata.isSymbolicLink()) {
+    throw buildError(
+      'MOXLEY_NATIVE_BUILD_PATH_INVALID',
+      'The native build package root identity changed.',
+    );
+  }
+  const rootIdentity = identityOf(rootMetadata);
+  const buildExisting = await localExistingMetadata(paths.build);
+  let buildIdentity = null;
+  if (buildExisting !== null) {
+    const authenticated = await authenticatePath(paths.build, 'directory');
+    buildIdentity = identityOf(authenticated);
+  }
+  const releaseExisting = await localExistingMetadata(paths.release);
+  let releaseIdentity = null;
+  if (releaseExisting !== null) {
+    if (buildIdentity === null) {
+      throw buildError(
+        'MOXLEY_NATIVE_BUILD_PATH_INVALID',
+        'A native build directory has an unexpected parent.',
+      );
+    }
+    const authenticated = await authenticatePath(paths.release, 'directory');
+    releaseIdentity = identityOf(authenticated);
+  }
+  return Object.freeze({ rootIdentity, buildIdentity, releaseIdentity });
+}
+
+async function createOrdinaryDirectoryLocally(target, parent, parentIdentity) {
+  if (!isStrictDescendant(parent, target)) {
+    throw buildError(
+      'MOXLEY_NATIVE_BUILD_PATH_INVALID',
+      'A native build directory is outside the package boundary.',
+    );
+  }
+  await requireLocalDirectoryIdentity(parent, parentIdentity);
+  try {
+    await fsp.mkdir(target, { recursive: false });
+  } catch {
+    throw buildError(
+      'MOXLEY_NATIVE_BUILD_PATH_INVALID',
+      'A native build directory could not be created.',
+    );
+  }
+  const metadata = await fsp.lstat(target, { bigint: true });
+  if (!metadata.isDirectory() || metadata.isSymbolicLink()) {
+    throw buildError(
+      'MOXLEY_NATIVE_BUILD_PATH_INVALID',
+      'A native build directory has an unexpected type.',
+    );
+  }
+  const canonical = await fsp.realpath(target);
+  if (!sameWindowsPath(canonical, target)) {
+    throw buildError(
+      'MOXLEY_NATIVE_BUILD_PATH_INVALID',
+      'A native build directory has an unexpected canonical identity.',
+    );
+  }
+  await requireLocalDirectoryIdentity(parent, parentIdentity);
+  return identityOf(metadata);
+}
+
+async function establishBuildDirectoriesLocally(
+  canonicalRoot,
+  paths,
+  preflight,
+) {
+  await requireLocalDirectoryIdentity(canonicalRoot, preflight.rootIdentity);
+  const buildIdentity =
+    preflight.buildIdentity === null
+      ? await createOrdinaryDirectoryLocally(
+          paths.build,
+          canonicalRoot,
+          preflight.rootIdentity,
+        )
+      : preflight.buildIdentity;
+  await requireLocalDirectoryIdentity(paths.build, buildIdentity);
+  const releaseIdentity =
+    preflight.releaseIdentity === null
+      ? await createOrdinaryDirectoryLocally(
+          paths.release,
+          paths.build,
+          buildIdentity,
+        )
+      : preflight.releaseIdentity;
+  await requireLocalDirectoryIdentity(paths.release, releaseIdentity);
+  return Object.freeze({ buildIdentity, releaseIdentity });
+}
+
 function packagePaths(root, stagingName) {
   const release = path.join(root, 'build', 'Release');
   const staging = path.join(release, stagingName);
@@ -1324,6 +2092,7 @@ function packagePaths(root, stagingName) {
     artifact: path.join(root, ...ARTIFACT_RELATIVE.split('/')),
     receipt: path.join(root, ...RECEIPT_RELATIVE.split('/')),
     lock: path.join(root, ...LOCK_RELATIVE.split('/')),
+    disposition: path.join(root, ...DISPOSITION_RELATIVE.split('/')),
     staging,
     stagedAddon: path.join(staging, 'moxley-windows-reparse.node'),
     stagedReceipt: path.join(
@@ -1392,16 +2161,169 @@ function validateLockRecord(value, expectedKey, expectedPipe) {
 
 function decodeLockBytes(bytes, expectedKey, expectedPipe) {
   return validateLockRecord(
-    decodeCanonicalJson(bytes, 2048),
+    decodeCanonicalJson(bytes, MAX_CARRIER_BYTES),
     expectedKey,
     expectedPipe,
   );
 }
 
+function createV2LockRecord(key, pipeName, stagingName, nonce) {
+  return Object.freeze({
+    lockFormat: LOCK_FORMAT,
+    lockVersion: 2,
+    repositoryKey: key,
+    pipeName,
+    stagingName,
+    nonce,
+    disposition: 'ACTIVE',
+  });
+}
+
+function validateV2LockRecord(value, expectedKey, expectedPipe) {
+  if (
+    !exactKeys(value, LOCK_V2_KEYS) ||
+    value.lockFormat !== LOCK_FORMAT ||
+    value.lockVersion !== 2 ||
+    value.repositoryKey !== expectedKey ||
+    !HEX_64.test(value.repositoryKey) ||
+    value.pipeName !== expectedPipe ||
+    value.stagingName !== `${STAGING_PREFIX}${value.stagingName.slice(-32)}` ||
+    !HEX_32.test(value.stagingName.slice(STAGING_PREFIX.length)) ||
+    !HEX_32.test(value.nonce) ||
+    value.disposition !== 'ACTIVE'
+  ) {
+    throw buildError(
+      'MOXLEY_NATIVE_BUILD_LOCK_INVALID',
+      'Native build lock evidence is invalid.',
+    );
+  }
+  return value;
+}
+
+function decodeV2LockBytes(bytes, expectedKey, expectedPipe) {
+  return validateV2LockRecord(
+    decodeCanonicalJson(bytes, MAX_CARRIER_BYTES),
+    expectedKey,
+    expectedPipe,
+  );
+}
+
+function classifyLockCarrierBytes(bytes, expectedKey, expectedPipe) {
+  const value = decodeCanonicalJson(bytes, MAX_CARRIER_BYTES);
+  if (value.lockVersion === 1) {
+    const record = validateLockRecord(value, expectedKey, expectedPipe);
+    return Object.freeze({
+      kind: 'LEGACY_V1',
+      record: Object.freeze({ ...record }),
+    });
+  }
+  if (value.lockVersion === 2) {
+    const record = validateV2LockRecord(value, expectedKey, expectedPipe);
+    return Object.freeze({
+      kind: 'ACTIVE_V2',
+      record: Object.freeze({ ...record }),
+    });
+  }
+  throw buildError(
+    'MOXLEY_NATIVE_BUILD_LOCK_INVALID',
+    'Native build lock evidence is invalid.',
+  );
+}
+
+function validateDispositionRecord(value, lock) {
+  if (
+    !exactKeys(value, DISPOSITION_KEYS) ||
+    value.dispositionFormat !== DISPOSITION_FORMAT ||
+    value.dispositionVersion !== 1 ||
+    value.lockVersion !== 2 ||
+    value.repositoryKey !== lock.repositoryKey ||
+    value.pipeName !== lock.pipeName ||
+    value.stagingName !== lock.stagingName ||
+    value.nonce !== lock.nonce
+  ) {
+    throw buildError(
+      'MOXLEY_NATIVE_BUILD_DISPOSITION_INVALID',
+      'Native build disposition evidence is invalid.',
+    );
+  }
+  const positive =
+    value.disposition === 'CLEAN_AUTHORIZED' &&
+    value.reason === null &&
+    value.causeReason === null;
+  const negative =
+    value.disposition === 'TERMINATION_UNCONFIRMED' &&
+    TERMINATION_DISPOSITION_REASONS.includes(value.reason) &&
+    TERMINATION_DISPOSITION_CAUSES.includes(value.causeReason);
+  if (!positive && !negative) {
+    throw buildError(
+      'MOXLEY_NATIVE_BUILD_DISPOSITION_INVALID',
+      'Native build disposition evidence is invalid.',
+    );
+  }
+  return value;
+}
+
+function createDispositionRecord(lock, disposition, reason, causeReason) {
+  validateV2LockRecord(lock, lock.repositoryKey, lock.pipeName);
+  return Object.freeze(
+    validateDispositionRecord(
+      {
+        dispositionFormat: DISPOSITION_FORMAT,
+        dispositionVersion: 1,
+        lockVersion: 2,
+        repositoryKey: lock.repositoryKey,
+        pipeName: lock.pipeName,
+        stagingName: lock.stagingName,
+        nonce: lock.nonce,
+        disposition,
+        reason,
+        causeReason,
+      },
+      lock,
+    ),
+  );
+}
+
+function decodeDispositionBytes(bytes, lock) {
+  validateV2LockRecord(lock, lock.repositoryKey, lock.pipeName);
+  return Object.freeze(
+    validateDispositionRecord(
+      decodeCanonicalJson(bytes, MAX_CARRIER_BYTES),
+      lock,
+    ),
+  );
+}
+
+async function readBoundedCarrier(handle) {
+  const output = Buffer.alloc(MAX_CARRIER_BYTES + 1);
+  let offset = 0;
+  while (offset < output.length) {
+    const result = await handle.read(
+      output,
+      offset,
+      output.length - offset,
+      offset,
+    );
+    if (result.bytesRead === 0) return output.subarray(0, offset);
+    offset += result.bytesRead;
+  }
+  throw buildError(
+    'MOXLEY_NATIVE_BUILD_EVIDENCE_INVALID',
+    'Canonical native build evidence is invalid.',
+  );
+}
+
 async function startLease(pipeName) {
   return new Promise((resolve, reject) => {
-    const server = net.createServer((socket) => socket.destroy());
+    const sockets = new Set();
+    const server = net.createServer((socket) => {
+      sockets.add(socket);
+      socket.once('close', () => sockets.delete(socket));
+      socket.destroy();
+    });
     let settled = false;
+    let closePromise = null;
+    let abandoned = false;
     server.once('error', () => {
       if (!settled) {
         settled = true;
@@ -1417,75 +2339,362 @@ async function startLease(pipeName) {
       if (settled) return;
       settled = true;
       resolve({
-        server,
         close() {
-          return new Promise((resolveClose) => server.close(resolveClose));
+          if (abandoned) return Promise.resolve();
+          if (closePromise === null) {
+            closePromise = new Promise((resolveClose, rejectClose) => {
+              try {
+                server.close((error) => {
+                  if (error) {
+                    rejectClose(error);
+                    return;
+                  }
+                  resolveClose();
+                });
+              } catch (error) {
+                rejectClose(error);
+              }
+            });
+          }
+          return closePromise;
+        },
+        abandon() {
+          if (abandoned) return;
+          abandoned = true;
+          for (const socket of sockets) {
+            try {
+              socket.destroy();
+            } catch {}
+            try {
+              socket.unref();
+            } catch {}
+          }
+          try {
+            server.close(() => {});
+          } catch {}
+          try {
+            if (typeof server.closeAllConnections === 'function') {
+              server.closeAllConnections();
+            }
+          } catch {}
+          try {
+            server.unref();
+          } catch {}
         },
       });
     });
   });
 }
 
-async function acquireLock(lockPath, bytes, state) {
-  let handle;
-  try {
-    handle = await fsp.open(lockPath, 'wx', 0o600);
-    state.lockOwned = true;
-    await handle.writeFile(bytes);
-    await handle.sync();
-  } catch (error) {
-    if (error && error.code === 'EEXIST') {
-      throw buildError(
-        'MOXLEY_NATIVE_BUILD_BUSY',
-        'Native build is already active or locked.',
-      );
-    }
-    throw buildError(
-      'MOXLEY_NATIVE_BUILD_LOCK_FAILED',
-      'Native build lock creation failed.',
-    );
-  } finally {
-    if (handle !== undefined) await handle.close().catch(() => {});
-  }
-  const metadata = await authenticatePath(lockPath, 'file');
-  state.lockIdentity = identityOf(metadata);
-  const actual = await fsp.readFile(lockPath);
-  if (!actual.equals(bytes)) {
-    throw buildError(
-      'MOXLEY_NATIVE_BUILD_LOCK_FAILED',
-      'Native build lock verification failed.',
-    );
-  }
+function appendCarrierJournal(state, entry) {
+  if (Array.isArray(state.journal)) state.journal.push(entry);
 }
 
-async function releaseOwnedLock(state) {
-  if (!state.lockOwned) return;
+function carrierFailure(carrier, collision = false) {
+  if (carrier === 'lock') {
+    return buildError(
+      collision
+        ? 'MOXLEY_NATIVE_BUILD_BUSY'
+        : 'MOXLEY_NATIVE_BUILD_LOCK_FAILED',
+      collision
+        ? 'Native build is already active or locked.'
+        : 'Native build lock creation or verification failed.',
+    );
+  }
+  return buildError(
+    collision
+      ? 'MOXLEY_NATIVE_BUILD_COLLISION'
+      : 'MOXLEY_NATIVE_BUILD_DISPOSITION_FAILED',
+    collision
+      ? 'Generated native output already exists; run explicit clean.'
+      : 'Native build disposition recording failed.',
+  );
+}
+
+function validateCarrierTestControl(control) {
+  if (control === null) return null;
+  if (
+    control === null ||
+    typeof control !== 'object' ||
+    control.token !== CARRIER_TEST_CONTROL_TOKEN ||
+    !exactKeys(control, ['token', 'fault']) ||
+    !CARRIER_FAULTS.includes(control.fault)
+  ) {
+    throw buildError(
+      'MOXLEY_NATIVE_BUILD_TEST_SCOPE_INVALID',
+      'Injected native build test scope is invalid.',
+    );
+  }
+  return control;
+}
+
+function throwCarrierFault(state, carrier, fault) {
+  appendCarrierJournal(state, `${carrier}:fault:${fault}`);
+  throw carrierFailure(carrier);
+}
+
+async function requireLocalDirectoryIdentity(target, expectedIdentity) {
   let metadata;
   try {
-    metadata = await fsp.lstat(state.paths.lock, { bigint: true });
+    metadata = await fsp.lstat(target, { bigint: true });
   } catch {
     throw buildError(
-      'MOXLEY_NATIVE_BUILD_LOCK_RELEASE_FAILED',
-      'Native build lock release failed.',
+      'MOXLEY_NATIVE_BUILD_PATH_INVALID',
+      'A native build directory identity changed.',
     );
   }
-  if (!sameIdentity(metadata, state.lockIdentity)) {
+  if (
+    !metadata.isDirectory() ||
+    metadata.isSymbolicLink() ||
+    !sameIdentity(metadata, expectedIdentity, false)
+  ) {
     throw buildError(
-      'MOXLEY_NATIVE_BUILD_LOCK_RELEASE_FAILED',
-      'Native build lock identity changed.',
+      'MOXLEY_NATIVE_BUILD_PATH_INVALID',
+      'A native build directory identity changed.',
     );
   }
-  await assertNoReparse(state.paths.lock);
+  return metadata;
+}
+
+async function authenticateCarrierLocally(target, expectedIdentity, byteLength) {
+  let metadata;
   try {
-    await fsp.unlink(state.paths.lock);
+    metadata = await fsp.lstat(target, { bigint: true });
   } catch {
     throw buildError(
-      'MOXLEY_NATIVE_BUILD_LOCK_RELEASE_FAILED',
-      'Native build lock release failed.',
+      'MOXLEY_NATIVE_BUILD_EVIDENCE_INVALID',
+      'Canonical native build evidence is invalid.',
     );
   }
-  await assertAbsent(state.paths.lock);
-  state.lockOwned = false;
+  if (
+    !metadata.isFile() ||
+    metadata.isSymbolicLink() ||
+    !sameIdentity(metadata, expectedIdentity, false) ||
+    metadata.size !== BigInt(byteLength)
+  ) {
+    throw buildError(
+      'MOXLEY_NATIVE_BUILD_EVIDENCE_INVALID',
+      'Canonical native build evidence is invalid.',
+    );
+  }
+  return metadata;
+}
+
+async function closeCarrierHandleOnce(handle) {
+  await handle.close();
+}
+
+async function writeOnceCarrier(options) {
+  const {
+    state,
+    carrier,
+    target,
+    parent,
+    parentIdentity,
+    bytes,
+    expectedKey,
+    expectedPipe,
+    lock,
+  } = options;
+  const control = validateCarrierTestControl(options.testControl ?? null);
+  if (
+    !['lock', 'disposition'].includes(carrier) ||
+    !Buffer.isBuffer(bytes) ||
+    bytes.length === 0 ||
+    bytes.length > MAX_CARRIER_BYTES ||
+    path.dirname(target).toLowerCase() !== parent.toLowerCase()
+  ) {
+    throw carrierFailure(carrier);
+  }
+  await requireLocalDirectoryIdentity(parent, parentIdentity);
+  if (control?.fault === 'create') {
+    throwCarrierFault(state, carrier, 'create');
+  }
+
+  let handle;
+  try {
+    handle = await fsp.open(target, 'wx', 0o600);
+  } catch (error) {
+    if (error && error.code === 'EEXIST') {
+      appendCarrierJournal(state, `${carrier}:collision`);
+      throw carrierFailure(carrier, true);
+    }
+    throw carrierFailure(carrier);
+  }
+  if (carrier === 'lock') {
+    state.lockOwned = true;
+    state.lockPublication = 'LOCK_CREATED_UNVERIFIED';
+  } else {
+    state.dispositionCreated = true;
+  }
+  appendCarrierJournal(state, `${carrier}:create`);
+  if (carrier === 'disposition') {
+    emitDiagnosticPhase(
+      state.diagnosticControl ?? null,
+      'DISPOSITION_CREATE_DONE',
+    );
+  }
+
+  let writeIdentity;
+  let pendingError = null;
+  try {
+    const metadata = await handle.stat({ bigint: true });
+    if (!metadata.isFile() || metadata.size !== 0n) {
+      throw carrierFailure(carrier);
+    }
+    writeIdentity = identityOf(metadata);
+    appendCarrierJournal(state, `${carrier}:stat`);
+
+    if (control?.fault === 'write-zero') {
+      appendCarrierJournal(state, `${carrier}:write`);
+      throwCarrierFault(state, carrier, 'write-zero');
+    }
+    const writeLength =
+      control?.fault === 'write-partial'
+        ? Math.max(1, Math.floor(bytes.length / 2))
+        : bytes.length;
+    const writeResult = await handle.write(bytes, 0, writeLength, 0);
+    appendCarrierJournal(state, `${carrier}:write`);
+    if (carrier === 'disposition') {
+      emitDiagnosticPhase(
+        state.diagnosticControl ?? null,
+        'DISPOSITION_WRITE_DONE',
+      );
+    }
+    if (writeResult.bytesWritten !== writeLength) throw carrierFailure(carrier);
+    if (control?.fault === 'write-partial') {
+      throwCarrierFault(state, carrier, 'write-partial');
+    }
+    if (control?.fault === 'sync') {
+      throwCarrierFault(state, carrier, 'sync');
+    }
+    await handle.sync();
+    appendCarrierJournal(state, `${carrier}:sync`);
+    if (carrier === 'disposition') {
+      emitDiagnosticPhase(
+        state.diagnosticControl ?? null,
+        'DISPOSITION_SYNC_DONE',
+      );
+    }
+  } catch (error) {
+    pendingError = error;
+  }
+
+  try {
+    await closeCarrierHandleOnce(handle);
+    appendCarrierJournal(state, `${carrier}:close`);
+    if (carrier === 'disposition') {
+      emitDiagnosticPhase(
+        state.diagnosticControl ?? null,
+        'DISPOSITION_CLOSE_DONE',
+      );
+    }
+    if (pendingError === null && control?.fault === 'close') {
+      throwCarrierFault(state, carrier, 'close');
+    }
+  } catch (error) {
+    if (pendingError === null) pendingError = error;
+  }
+  if (pendingError !== null) throw carrierFailure(carrier);
+
+  if (control?.fault === 'authentication') {
+    throwCarrierFault(state, carrier, 'authentication');
+  }
+  await requireLocalDirectoryIdentity(parent, parentIdentity);
+  const pathMetadata = await authenticateCarrierLocally(
+    target,
+    writeIdentity,
+    bytes.length,
+  );
+  const finalIdentity = identityOf(pathMetadata);
+  appendCarrierJournal(state, `${carrier}:authenticate`);
+  if (carrier === 'disposition') {
+    emitDiagnosticPhase(
+      state.diagnosticControl ?? null,
+      'DISPOSITION_AUTHENTICATE_DONE',
+    );
+  }
+
+  let readHandle;
+  let actual;
+  let readError = null;
+  try {
+    readHandle = await fsp.open(target, 'r');
+    const handleMetadata = await readHandle.stat({ bigint: true });
+    if (!sameIdentity(handleMetadata, finalIdentity, true)) {
+      throw carrierFailure(carrier);
+    }
+    actual = await readBoundedCarrier(readHandle);
+  } catch (error) {
+    readError = error;
+  }
+  if (readHandle !== undefined) {
+    try {
+      await closeCarrierHandleOnce(readHandle);
+    } catch (error) {
+      if (readError === null) readError = error;
+    }
+  }
+  if (readError !== null) throw carrierFailure(carrier);
+  if (control?.fault === 'readback') {
+    throwCarrierFault(state, carrier, 'readback');
+  }
+  await authenticateCarrierLocally(target, finalIdentity, bytes.length);
+  const record =
+    carrier === 'lock'
+      ? decodeV2LockBytes(actual, expectedKey, expectedPipe)
+      : decodeDispositionBytes(actual, lock);
+  if (!actual.equals(bytes)) throw carrierFailure(carrier);
+  appendCarrierJournal(state, `${carrier}:readback`);
+  if (carrier === 'disposition') {
+    emitDiagnosticPhase(
+      state.diagnosticControl ?? null,
+      'DISPOSITION_READBACK_DONE',
+    );
+  }
+  return Object.freeze({
+    record: Object.freeze({ ...record }),
+    bytes: Buffer.from(actual),
+    identity: finalIdentity,
+  });
+}
+
+async function acquireV2Lock(state, record, bytes, testControl = null) {
+  const result = await writeOnceCarrier({
+    state,
+    carrier: 'lock',
+    target: state.paths.lock,
+    parent: state.paths.release,
+    parentIdentity: state.releaseIdentity,
+    bytes,
+    expectedKey: record.repositoryKey,
+    expectedPipe: record.pipeName,
+    lock: null,
+    testControl,
+  });
+  state.lockRecord = result.record;
+  state.lockBytes = result.bytes;
+  state.lockIdentity = result.identity;
+  state.lockPublication = 'ACTIVE_VERIFIED';
+  return result;
+}
+
+function validateHostEvidence(host) {
+  const keys = Object.keys(EXPECTED_HOST);
+  const mismatch = keys.find((key) => host?.[key] !== EXPECTED_HOST[key]);
+  if (!exactKeys(host, keys) || mismatch !== undefined) {
+    const field = mismatch ?? 'keys';
+    const expected = mismatch === undefined ? keys.join(',') : EXPECTED_HOST[field];
+    const actual = mismatch === undefined
+      ? Object.keys(host ?? {}).join(',')
+      : String(host?.[field]);
+    throw buildError(
+      'MOXLEY_NATIVE_BUILD_INPUT_INVALID',
+      'Exact Windows host and filesystem were not authenticated. ' +
+        `${field} expected=${expected} actual=${actual.replace(/[\r\n]/g, ' ').slice(0, 80)}`,
+    );
+  }
+  return Object.freeze({ ...host });
 }
 
 async function authenticateHost(canonicalRoot) {
@@ -1507,40 +2716,26 @@ $value=[ordered]@{caption=$os.Caption;displayVersion=$cv.DisplayVersion;build=($
 [Console]::Out.Write(($value | ConvertTo-Json -Compress))`,
     { MOXLEY_BUILD_DRIVE_ROOT: driveRoot },
   );
-  if (
-    !exactKeys(host, [
-      'caption',
-      'displayVersion',
-      'build',
-      'driveType',
-      'driveFormat',
-    ]) ||
-    host.caption !== 'Microsoft Windows 11 Home' ||
-    host.displayVersion !== '25H2' ||
-    host.build !== '26200.8875' ||
-    host.driveType !== 'Fixed' ||
-    host.driveFormat !== 'NTFS'
-  ) {
-    throw buildError(
-      'MOXLEY_NATIVE_BUILD_INPUT_INVALID',
-      'Exact Windows host and filesystem were not authenticated.',
-    );
-  }
+  return validateHostEvidence(host);
 }
 
-async function authenticatePackageRoot() {
+function validateNodeRuntimeInputs(runtime) {
   if (
-    process.platform !== 'win32' ||
-    process.arch !== 'x64' ||
-    process.version !== 'v24.13.0' ||
-    process.versions.modules !== '137' ||
-    process.versions.napi !== '10'
+    runtime.platform !== 'win32' ||
+    runtime.arch !== 'x64' ||
+    runtime.version !== 'v24.13.0' ||
+    runtime.versions.modules !== '137' ||
+    runtime.versions.napi !== '10'
   ) {
     throw buildError(
       'MOXLEY_NATIVE_BUILD_INPUT_INVALID',
       'Exact Node runtime inputs were not authenticated.',
     );
   }
+}
+
+async function authenticatePackageRoot() {
+  validateNodeRuntimeInputs(process);
   await authenticatePath(PACKAGE_ROOT, 'directory');
   await authenticatePath(__dirname, 'directory');
   await authenticatePath(__filename, 'file');
@@ -1980,7 +3175,13 @@ async function compileProductionAddon(paths, toolchain) {
   await authenticatePath(paths.stagedAddon, 'file');
 }
 
-async function authenticateStagingDirectory(state) {
+async function authenticateStagingDirectory(
+  state,
+  emitStagingPhases = false,
+) {
+  const diagnosticControl =
+    emitStagingPhases ? state.diagnosticControl ?? null : null;
+  emitDiagnosticPhase(diagnosticControl, 'STAGING_ROOT_BEGIN');
   const metadata = await authenticatePath(state.paths.staging, 'directory');
   if (!sameIdentity(metadata, state.stagingIdentity, false)) {
     throw buildError(
@@ -1988,23 +3189,49 @@ async function authenticateStagingDirectory(state) {
       'Native build staging identity changed.',
     );
   }
+  emitDiagnosticPhase(diagnosticControl, 'STAGING_ROOT_DONE');
   return inventoryStagingTree(
     state.paths.staging,
     state.allowedStagingNames,
+    false,
+    diagnosticControl,
   );
 }
 
-async function inventoryStagingTree(staging, allowedFileNames) {
+async function inventoryStagingTree(
+  staging,
+  allowedFileNames,
+  allowCleanupPrefixes = false,
+  diagnosticControl = null,
+) {
+  if (typeof allowCleanupPrefixes !== 'boolean') {
+    throw buildError(
+      'MOXLEY_NATIVE_BUILD_STAGE_INVALID',
+      'Native build staging cleanup policy is invalid.',
+    );
+  }
   const topNames = (await fsp.readdir(staging)).sort(ordinalCompare);
+  emitDiagnosticPhase(diagnosticControl, 'STAGING_READDIR_DONE', {
+    entryCount: topNames.length,
+  });
   const files = [];
   const directories = [];
-  for (const name of topNames) {
+  for (let ordinal = 0; ordinal < topNames.length; ordinal += 1) {
+    const name = topNames[ordinal];
     const target = path.join(staging, name);
     if (allowedFileNames.has(name)) {
+      emitDiagnosticPhase(diagnosticControl, 'STAGING_ENTRY_BEGIN', {
+        kind: 'file',
+        ordinal,
+      });
       const metadata = await authenticatePath(target, 'file');
       files.push(
         Object.freeze({ target, identity: identityOf(metadata) }),
       );
+      emitDiagnosticPhase(diagnosticControl, 'STAGING_ENTRY_DONE', {
+        kind: 'file',
+        ordinal,
+      });
       continue;
     }
     if (name !== 'Microsoft') {
@@ -2013,8 +3240,22 @@ async function inventoryStagingTree(staging, allowedFileNames) {
         'Native build staging contains an unexpected entry.',
       );
     }
+    emitDiagnosticPhase(diagnosticControl, 'STAGING_ENTRY_BEGIN', {
+      kind: 'directory',
+      ordinal,
+    });
     const microsoftMetadata = await authenticatePath(target, 'directory');
     const microsoftChildren = await fsp.readdir(target);
+    if (allowCleanupPrefixes && microsoftChildren.length === 0) {
+      directories.push(
+        Object.freeze({ target, identity: identityOf(microsoftMetadata) }),
+      );
+      emitDiagnosticPhase(diagnosticControl, 'STAGING_ENTRY_DONE', {
+        kind: 'directory',
+        ordinal,
+      });
+      continue;
+    }
     if (
       microsoftChildren.length !== 1 ||
       microsoftChildren[0] !== 'VSApplicationInsights'
@@ -2027,6 +3268,13 @@ async function inventoryStagingTree(staging, allowedFileNames) {
     const insights = path.join(target, 'VSApplicationInsights');
     const insightsMetadata = await authenticatePath(insights, 'directory');
     const insightChildren = await fsp.readdir(insights);
+    if (allowCleanupPrefixes && insightChildren.length === 0) {
+      directories.push(
+        Object.freeze({ target: insights, identity: identityOf(insightsMetadata) }),
+        Object.freeze({ target, identity: identityOf(microsoftMetadata) }),
+      );
+      continue;
+    }
     if (
       insightChildren.length !== 1 ||
       !/^vstel[0-9a-f]{32}$/.test(insightChildren[0])
@@ -2049,6 +3297,10 @@ async function inventoryStagingTree(staging, allowedFileNames) {
       Object.freeze({ target: insights, identity: identityOf(insightsMetadata) }),
       Object.freeze({ target, identity: identityOf(microsoftMetadata) }),
     );
+    emitDiagnosticPhase(diagnosticControl, 'STAGING_ENTRY_DONE', {
+      kind: 'directory',
+      ordinal,
+    });
   }
   return Object.freeze({
     files: Object.freeze(files),
@@ -2056,33 +3308,15 @@ async function inventoryStagingTree(staging, allowedFileNames) {
   });
 }
 
-async function removeAuthenticatedStaging(state) {
-  if (!state.stagingCreated) return;
+async function prepareAuthenticatedStagingRetention(state) {
+  if (!state.stagingCreated) return null;
+  if (state.stagingIdentity === null) {
+    throw buildError(
+      'MOXLEY_NATIVE_BUILD_STAGE_INVALID',
+      'Native build staging identity is unavailable.',
+    );
+  }
   const inventory = await authenticateStagingDirectory(state);
-  for (const item of inventory.files) {
-    const metadata = await fsp.lstat(item.target, { bigint: true });
-    if (!sameIdentity(metadata, item.identity)) {
-      throw buildError(
-        'MOXLEY_NATIVE_BUILD_STAGE_INVALID',
-        'Native build staging entry identity changed.',
-      );
-    }
-    await assertNoReparse(item.target);
-    await fsp.unlink(item.target);
-    await assertAbsent(item.target);
-  }
-  for (const item of inventory.directories) {
-    const metadata = await fsp.lstat(item.target, { bigint: true });
-    if (!sameIdentity(metadata, item.identity, false)) {
-      throw buildError(
-        'MOXLEY_NATIVE_BUILD_STAGE_INVALID',
-        'Native build staging directory identity changed.',
-      );
-    }
-    await assertNoReparse(item.target);
-    await fsp.rmdir(item.target);
-    await assertAbsent(item.target);
-  }
   const directory = await fsp.lstat(state.paths.staging, { bigint: true });
   if (!sameIdentity(directory, state.stagingIdentity, false)) {
     throw buildError(
@@ -2090,10 +3324,85 @@ async function removeAuthenticatedStaging(state) {
       'Native build staging identity changed.',
     );
   }
-  await assertNoReparse(state.paths.staging);
-  await fsp.rmdir(state.paths.staging);
-  await assertAbsent(state.paths.staging);
-  state.stagingCreated = false;
+  return Object.freeze({
+    files: inventory.files,
+    directories: inventory.directories,
+    staging: Object.freeze({
+      target: state.paths.staging,
+      identity: state.stagingIdentity,
+    }),
+  });
+}
+
+async function prepareRetentionPlan(state) {
+  const staging = await prepareAuthenticatedStagingRetention(state);
+  emitDiagnosticPhase(
+    state.diagnosticControl ?? null,
+    'RETENTION_STAGING_DONE',
+  );
+  if (
+    state.lockPublication !== 'ACTIVE_VERIFIED' ||
+    !state.lockOwned ||
+    state.lockIdentity === null ||
+    state.lockRecord === null ||
+    state.lockBytes === null
+  ) {
+    throw buildError(
+      'MOXLEY_NATIVE_BUILD_LOCK_INVALID',
+      'Native build lock evidence is invalid.',
+    );
+  }
+  const lockMetadata = await authenticatePath(state.paths.lock, 'file');
+  if (!sameIdentity(lockMetadata, state.lockIdentity, true)) {
+    throw buildError(
+      'MOXLEY_NATIVE_BUILD_LOCK_INVALID',
+      'Native build lock evidence is invalid.',
+    );
+  }
+  emitDiagnosticPhase(state.diagnosticControl ?? null, 'LOCK_AUTH_DONE');
+  const lockBytes = await fsp.readFile(state.paths.lock);
+  decodeV2LockBytes(
+    lockBytes,
+    state.lockRecord.repositoryKey,
+    state.lockRecord.pipeName,
+  );
+  if (!lockBytes.equals(state.lockBytes)) {
+    throw buildError(
+      'MOXLEY_NATIVE_BUILD_LOCK_INVALID',
+      'Native build lock evidence is invalid.',
+    );
+  }
+  emitDiagnosticPhase(state.diagnosticControl ?? null, 'LOCK_READBACK_DONE');
+  await assertAbsent(state.paths.disposition, true);
+  emitDiagnosticPhase(
+    state.diagnosticControl ?? null,
+    'RETENTION_DISPOSITION_ABSENT',
+  );
+
+  await assertAbsent(state.paths.artifact, true);
+  emitDiagnosticPhase(
+    state.diagnosticControl ?? null,
+    'RETENTION_ARTIFACT_ABSENT',
+  );
+  await assertAbsent(state.paths.receipt, true);
+  emitDiagnosticPhase(
+    state.diagnosticControl ?? null,
+    'RETENTION_RECEIPT_ABSENT',
+  );
+  appendCarrierJournal(state, 'retention:prepared');
+  if (state[RETENTION_PLAN_TEST_ERROR] instanceof NativeBuildError) {
+    const injected = state[RETENTION_PLAN_TEST_ERROR];
+    state[RETENTION_PLAN_TEST_ERROR] = null;
+    throw injected;
+  }
+  emitDiagnosticPhase(state.diagnosticControl ?? null, 'RETENTION_PREPARED');
+  return Object.freeze({
+    staging,
+    lock: Object.freeze({
+      target: state.paths.lock,
+      identity: state.lockIdentity,
+    }),
+  });
 }
 
 async function runProbe(addonPath, probePath) {
@@ -2269,104 +3578,172 @@ async function writeReceipt(paths, toolchain) {
   return Object.freeze({ receipt, bytes, artifactEvidence });
 }
 
-async function verifyFinalReceiptAndArtifact(paths, expected) {
-  await authenticatePath(paths.receipt, 'file');
-  const receiptBytes = await fsp.readFile(paths.receipt);
-  const receipt = decodeReceiptBytes(receiptBytes);
-  if (!receiptBytes.equals(expected.bytes)) {
-    throw buildError(
-      'MOXLEY_NATIVE_BUILD_RECEIPT_INVALID',
-      'Final native build receipt bytes changed.',
+async function closeLeaseOnce(state, suppressFailure = false) {
+  if (state.lease === null) return;
+  emitDiagnosticPhase(state.diagnosticControl ?? null, 'LEASE_CLOSE_BEGIN');
+  const lease = state.lease;
+  state.lease = null;
+  const timeoutError = leaseCloseTimedOutError();
+  let timer = null;
+  const closePromise = Promise.resolve().then(() => lease.close());
+  const timeoutPromise = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(timeoutError), LEASE_CLOSE_TIMEOUT_MS);
+  });
+  try {
+    await Promise.race([closePromise, timeoutPromise]);
+  } catch (error) {
+    const timedOut = error === timeoutError;
+    appendCarrierJournal(
+      state,
+      timedOut ? 'lease:close-timeout' : 'lease:close-rejected',
     );
-  }
-  await authenticatePath(paths.artifact, 'file');
-  const artifact = await fileEvidence(paths.artifact);
-  if (
-    artifact.byteLength !== receipt.artifact.byteLength ||
-    artifact.sha256 !== receipt.artifact.sha256 ||
-    artifact.byteLength !== expected.artifactEvidence.byteLength ||
-    artifact.sha256 !== expected.artifactEvidence.sha256
-  ) {
-    throw buildError(
-      'MOXLEY_NATIVE_BUILD_RECEIPT_INVALID',
-      'Final native artifact does not match its receipt.',
+    emitDiagnosticPhase(
+      state.diagnosticControl ?? null,
+      timedOut ? 'LEASE_CLOSE_TIMEOUT' : 'LEASE_CLOSE_REJECTED',
     );
+    try {
+      emitDiagnosticPhase(
+        state.diagnosticControl ?? null,
+        'LEASE_ABANDON_CALLED',
+      );
+      Promise.resolve(lease.abandon()).catch(() => {});
+    } catch {}
+    if (!suppressFailure) throw error;
+    return;
+  } finally {
+    if (timer !== null) clearTimeout(timer);
   }
-  return artifact;
+  appendCarrierJournal(state, 'lease:close');
+  emitDiagnosticPhase(state.diagnosticControl ?? null, 'LEASE_CLOSE_DONE');
 }
 
-async function promoteAndFinalize(context) {
-  const { state, expected, hooks } = context;
-  const paths = state.paths;
-  await assertAbsent(paths.artifact, true);
-  await assertAbsent(paths.receipt, true);
-  if (hooks.beforeBinaryPromotion) await hooks.beforeBinaryPromotion();
-  try {
-    await fsp.link(paths.stagedAddon, paths.artifact);
-  } catch {
-    throw buildError(
-      'MOXLEY_NATIVE_BUILD_COLLISION',
-      'Generated native output collided during no-replace promotion.',
-    );
-  }
-  state.firstPromotionOccurred = true;
-  await fsp.unlink(paths.stagedAddon);
-  if (hooks.afterBinaryPromotion) await hooks.afterBinaryPromotion();
-  try {
-    await fsp.link(paths.stagedReceipt, paths.receipt);
-  } catch {
-    throw buildError(
-      'MOXLEY_NATIVE_BUILD_COLLISION',
-      'Generated native output collided during no-replace promotion.',
-    );
-  }
-  await fsp.unlink(paths.stagedReceipt);
-  if (hooks.afterReceiptPromotion) await hooks.afterReceiptPromotion();
+async function publishTerminalDisposition(
+  state,
+  disposition,
+  reason,
+  causeReason,
+  testControl = null,
+) {
+  emitDiagnosticPhase(state.diagnosticControl ?? null, 'DISPOSITION_BEGIN');
+  const record = createDispositionRecord(
+    state.lockRecord,
+    disposition,
+    reason,
+    causeReason,
+  );
+  const bytes = Buffer.from(canonicalJson(record), 'utf8');
+  decodeDispositionBytes(bytes, state.lockRecord);
+  state.expectedDispositionRecord = record;
+  state.expectedDispositionBytes = bytes;
+  const result = await writeOnceCarrier({
+    state,
+    carrier: 'disposition',
+    target: state.paths.disposition,
+    parent: state.paths.release,
+    parentIdentity: state.releaseIdentity,
+    bytes,
+    expectedKey: state.lockRecord.repositoryKey,
+    expectedPipe: state.lockRecord.pipeName,
+    lock: state.lockRecord,
+    testControl,
+  });
+  state.dispositionIdentity = result.identity;
+  state.dispositionRecord = result.record;
+  state.dispositionBytes = result.bytes;
+  state.dispositionAcknowledged = true;
+  emitDiagnosticPhase(
+    state.diagnosticControl ?? null,
+    'DISPOSITION_ACKNOWLEDGED',
+  );
+  return result;
+}
 
-  await context.verifyFinalReceipt();
-  if (hooks.afterFinalReceiptVerification) {
-    await hooks.afterFinalReceiptVerification();
-  }
-  const artifact = await context.verifyFinalArtifact();
-  if (hooks.afterFinalArtifactVerification) {
-    await hooks.afterFinalArtifactVerification();
-  }
-  await context.probeFinal();
-  if (hooks.afterFinalProbe) await hooks.afterFinalProbe();
-  await removeAuthenticatedStaging(state);
-  if (hooks.beforeLockRelease) await hooks.beforeLockRelease();
-  await releaseOwnedLock(state);
-  await state.lease.close();
-  state.lease = null;
-  return artifact;
+async function deferBeforePromotion(state) {
+  await assertAbsent(state.paths.artifact, true);
+  emitDiagnosticPhase(
+    state.diagnosticControl ?? null,
+    'DEFERRAL_ARTIFACT_ABSENT',
+  );
+  await assertAbsent(state.paths.receipt, true);
+  emitDiagnosticPhase(
+    state.diagnosticControl ?? null,
+    'DEFERRAL_RECEIPT_ABSENT',
+  );
+  emitDiagnosticPhase(state.diagnosticControl ?? null, 'DEFERRAL_THROW');
+  throw physicalCleanupDeferredError();
+}
+
+function throwOriginalBuildError(state, originalError) {
+  emitDiagnosticPhase(
+    state.diagnosticControl ?? null,
+    'ORIGINAL_ERROR_RETHROWN',
+  );
+  throw originalError;
 }
 
 async function handleBuildFailure(state, originalError) {
-  if (isTerminationUnconfirmed(originalError)) {
-    if (state.lease !== null) {
-      await state.lease.close().catch(() => {});
-      state.lease = null;
-    }
-    throw originalError;
+  const activeLock =
+    state.lockOwned &&
+    state.lockPublication === 'ACTIVE_VERIFIED' &&
+    state.lockRecord !== null &&
+    state.lockBytes !== null;
+  if (!activeLock) {
+    await closeLeaseOnce(state, true);
+    throwOriginalBuildError(state, originalError);
   }
 
-  let failure = originalError;
-  if (!state.firstPromotionOccurred) {
+  if (isTerminationUnconfirmed(originalError)) {
     try {
-      await removeAuthenticatedStaging(state);
-      await releaseOwnedLock(state);
-    } catch (cleanupError) {
-      failure = cleanupError;
+      await publishTerminalDisposition(
+        state,
+        'TERMINATION_UNCONFIRMED',
+        originalError.reason,
+        originalError.cause?.reason ?? null,
+        state[TERMINAL_CARRIER_TEST_CONTROL] ?? null,
+      );
+    } catch {}
+    await closeLeaseOnce(state, true);
+    throwOriginalBuildError(state, originalError);
+  }
+
+  emitDiagnosticPhase(state.diagnosticControl ?? null, 'RETENTION_BEGIN');
+  try {
+    await prepareRetentionPlan(state);
+  } catch (retentionError) {
+    if (isTerminationUnconfirmed(retentionError)) {
+      try {
+        await publishTerminalDisposition(
+          state,
+          'TERMINATION_UNCONFIRMED',
+          retentionError.reason,
+          retentionError.cause?.reason ?? null,
+          state[TERMINAL_CARRIER_TEST_CONTROL] ?? null,
+        );
+      } catch {}
     }
+    await closeLeaseOnce(state, true);
+    throwOriginalBuildError(state, originalError);
   }
-  if (state.lease !== null) {
-    await state.lease.close().catch(() => {});
-    state.lease = null;
+
+  try {
+    await publishTerminalDisposition(
+      state,
+      'CLEAN_AUTHORIZED',
+      null,
+      null,
+      state[TERMINAL_CARRIER_TEST_CONTROL] ?? null,
+    );
+  } catch {
+    await closeLeaseOnce(state, true);
+    throwOriginalBuildError(state, originalError);
   }
-  throw failure;
+
+  await closeLeaseOnce(state, true);
+  throwOriginalBuildError(state, originalError);
 }
 
-async function runBuild() {
+async function runBuildWithDiagnosticControl(diagnosticControl) {
+  diagnosticControlState(diagnosticControl, true);
   const inputs = await authenticateBuildInputs();
   const stagingName = `${STAGING_PREFIX}${randomBytes(16).toString('hex')}`;
   const nonce = randomBytes(16).toString('hex');
@@ -2380,47 +3757,64 @@ async function runBuild() {
     path.relative(inputs.canonicalRoot, paths.receipt).split(path.sep).join('/') !==
       RECEIPT_RELATIVE ||
     path.relative(inputs.canonicalRoot, paths.lock).split(path.sep).join('/') !==
-      LOCK_RELATIVE
+      LOCK_RELATIVE ||
+    path.relative(inputs.canonicalRoot, paths.disposition).split(path.sep).join('/') !==
+      DISPOSITION_RELATIVE
   ) {
     throw buildError(
       'MOXLEY_NATIVE_BUILD_PATH_INVALID',
       'Exact package-relative native build paths did not authenticate.',
     );
   }
-  await ensureOrdinaryDirectory(paths.build, inputs.canonicalRoot);
-  await ensureOrdinaryDirectory(paths.release, paths.build);
+  const directoryPreflight = await preflightBuildDirectories(
+    inputs.canonicalRoot,
+    paths,
+  );
+  await assertBuildCollisionPathsAbsent(paths);
 
   const state = {
     paths,
     lease: null,
     lockOwned: false,
+    lockPublication: 'ABSENT',
     lockIdentity: null,
+    lockRecord: null,
+    lockBytes: null,
+    dispositionCreated: false,
+    dispositionIdentity: null,
+    dispositionRecord: null,
+    dispositionBytes: null,
+    dispositionAcknowledged: false,
+    expectedDispositionRecord: null,
+    expectedDispositionBytes: null,
+    releaseIdentity: null,
     stagingCreated: false,
     stagingIdentity: null,
-    firstPromotionOccurred: false,
     allowedStagingNames: new Set(STAGING_FILE_NAMES),
+    journal: null,
+    diagnosticControl,
   };
   try {
     state.lease = await startLease(inputs.pipeName);
-    const lockRecord = createLockRecord(
+    const directories = await establishBuildDirectoriesLocally(
+      inputs.canonicalRoot,
+      paths,
+      directoryPreflight,
+    );
+    state.releaseIdentity = directories.releaseIdentity;
+    const lockRecord = createV2LockRecord(
       inputs.repositoryKey,
       inputs.pipeName,
       stagingName,
       nonce,
     );
-    validateLockRecord(lockRecord, inputs.repositoryKey, inputs.pipeName);
+    validateV2LockRecord(lockRecord, inputs.repositoryKey, inputs.pipeName);
     const lockBytes = Buffer.from(canonicalJson(lockRecord), 'utf8');
-    decodeLockBytes(lockBytes, inputs.repositoryKey, inputs.pipeName);
-    await acquireLock(paths.lock, lockBytes, state);
-    await assertAbsent(paths.artifact, true);
-    await assertAbsent(paths.receipt, true);
+    decodeV2LockBytes(lockBytes, inputs.repositoryKey, inputs.pipeName);
+    await acquireV2Lock(state, lockRecord, lockBytes);
+    await assertBuildCollisionPathsAbsent(paths);
 
-    const stagingMetadata = await ensureOrdinaryDirectory(
-      paths.staging,
-      paths.release,
-    );
-    state.stagingCreated = true;
-    state.stagingIdentity = identityOf(stagingMetadata);
+    await createOwnedStagingDirectory(state);
     await fsp.writeFile(paths.probeFile, 'moxley-native-build-probe\n', {
       encoding: 'utf8',
       flag: 'wx',
@@ -2429,69 +3823,249 @@ async function runBuild() {
     await authenticateStagingDirectory(state);
     await runProbe(paths.stagedAddon, paths.probeFile);
     const expected = await writeReceipt(paths, inputs.toolchain);
-    await authenticateStagingDirectory(state);
+    emitDiagnosticPhase(diagnosticControl, 'RECEIPT_DONE');
+    emitDiagnosticPhase(diagnosticControl, 'STAGING_AUTH_2_BEGIN');
+    await authenticateStagingDirectory(state, true);
+    emitDiagnosticPhase(diagnosticControl, 'STAGING_AUTH_2_DONE');
 
-    let finalArtifact;
-    finalArtifact = await promoteAndFinalize({
-      state,
-      expected,
-      hooks: Object.freeze({}),
-      verifyFinalReceipt: async () => {
-        await authenticatePath(paths.receipt, 'file');
-        const bytes = await fsp.readFile(paths.receipt);
-        decodeReceiptBytes(bytes);
-        if (!bytes.equals(expected.bytes)) {
-          throw buildError(
-            'MOXLEY_NATIVE_BUILD_RECEIPT_INVALID',
-            'Final native build receipt bytes changed.',
-          );
-        }
-      },
-      verifyFinalArtifact: () =>
-        verifyFinalReceiptAndArtifact(paths, expected),
-      probeFinal: () => runProbe(paths.artifact, paths.probeFile),
-    });
-    return {
-      status: 'built',
-      artifact: ARTIFACT_RELATIVE,
-      receipt: RECEIPT_RELATIVE,
-      artifactSha256: finalArtifact.sha256,
-    };
+    validateReceipt(expected.receipt);
+    emitDiagnosticPhase(diagnosticControl, 'RECEIPT_VALIDATED');
+    emitDiagnosticPhase(diagnosticControl, 'DEFERRAL_CALLED');
+    return await deferBeforePromotion(state);
   } catch (error) {
+    emitDiagnosticPhase(diagnosticControl, 'RUNBUILD_CATCH_ENTERED');
     return handleBuildFailure(state, error);
   }
 }
 
-async function exercisePromotionScenario(sandboxRoot, mode) {
+function runBuild() {
+  return runBuildWithDiagnosticControl(null);
+}
+
+function runBuildForDiagnostic(diagnosticControl) {
+  diagnosticControlState(diagnosticControl);
+  return runBuildWithDiagnosticControl(diagnosticControl);
+}
+
+async function readExistingBytes(target) {
+  try {
+    return await fsp.readFile(target);
+  } catch (error) {
+    if (error && error.code === 'ENOENT') return null;
+    throw error;
+  }
+}
+
+async function exerciseCarrierScenario(sandboxRoot, scenario) {
   const tempRoot = await fsp.realpath(os.tmpdir());
   const canonicalSandbox = await fsp.realpath(sandboxRoot);
   if (
     path.dirname(canonicalSandbox).toLowerCase() !== tempRoot.toLowerCase() ||
     !path.basename(canonicalSandbox).startsWith('moxley-native-build-test-') ||
-    ![
-      'success',
-      'pre',
-      'post',
-      'termination-unconfirmed-pre',
-      'termination-unconfirmed-post',
-    ].includes(mode)
+    scenario === null ||
+    typeof scenario !== 'object' ||
+    !exactKeys(scenario, ['disposition', 'fault']) ||
+    !['CLEAN_AUTHORIZED', 'TERMINATION_UNCONFIRMED'].includes(
+      scenario.disposition,
+    ) ||
+    !CARRIER_FAULTS.includes(scenario.fault)
   ) {
     throw buildError(
       'MOXLEY_NATIVE_BUILD_TEST_SCOPE_INVALID',
       'Injected native build test scope is invalid.',
     );
   }
+
+  const stagingName = `${STAGING_PREFIX}${'a'.repeat(32)}`;
+  const key = repositoryKey(canonicalSandbox);
+  const pipeName = pipeNameForKey(key);
+  const paths = packagePaths(canonicalSandbox, stagingName);
+  await fsp.mkdir(paths.build, { recursive: false });
+  await fsp.mkdir(paths.release, { recursive: false });
+  const releaseMetadata = await fsp.lstat(paths.release, { bigint: true });
+  let leaseClosed = false;
+  const state = {
+    paths,
+    lease: {
+      async close() {
+        leaseClosed = true;
+      },
+    },
+    lockOwned: false,
+    lockPublication: 'ABSENT',
+    lockIdentity: null,
+    lockRecord: null,
+    lockBytes: null,
+    dispositionCreated: false,
+    dispositionIdentity: null,
+    dispositionRecord: null,
+    dispositionBytes: null,
+    dispositionAcknowledged: false,
+    expectedDispositionRecord: null,
+    expectedDispositionBytes: null,
+    releaseIdentity: identityOf(releaseMetadata),
+    stagingCreated: false,
+    stagingIdentity: null,
+    allowedStagingNames: new Set(['moxley-windows-reparse.obj']),
+    journal: [],
+  };
+  const lockRecord = createV2LockRecord(
+    key,
+    pipeName,
+    stagingName,
+    'b'.repeat(32),
+  );
+  const lockBytes = Buffer.from(canonicalJson(lockRecord), 'utf8');
+  await acquireV2Lock(state, lockRecord, lockBytes);
+
+  await fsp.mkdir(paths.staging, { recursive: false });
+  const stagingMetadata = await fsp.lstat(paths.staging, { bigint: true });
+  state.stagingCreated = true;
+  state.stagingIdentity = identityOf(stagingMetadata);
+  await fsp.writeFile(paths.object, 'object', { flag: 'wx' });
+
+  const originalError =
+    scenario.disposition === 'TERMINATION_UNCONFIRMED'
+      ? terminationUnconfirmedError(
+          SUBPROCESS_REASONS.TERMINATION_NOT_CONFIRMED,
+          SUBPROCESS_REASONS.TIMEOUT,
+        )
+      : buildError(
+          'MOXLEY_NATIVE_BUILD_INJECTED_FAILURE',
+          'Injected native build failure.',
+        );
+  const control = Object.freeze({
+    token: CARRIER_TEST_CONTROL_TOKEN,
+    fault: scenario.fault,
+  });
+  state[TERMINAL_CARRIER_TEST_CONTROL] = control;
+  let returnedError;
+  try {
+    await handleBuildFailure(state, originalError);
+  } catch (error) {
+    returnedError = error;
+  }
+  if (returnedError === undefined) {
+    throw buildError(
+      'MOXLEY_NATIVE_BUILD_TEST_FAILED',
+      'Injected native build scenario did not terminate.',
+    );
+  }
+
+  const actualLockBytes = await readExistingBytes(paths.lock);
+  const actualDispositionBytes = await readExistingBytes(paths.disposition);
+  let decodedDisposition = null;
+  if (actualDispositionBytes !== null) {
+    try {
+      decodedDisposition = decodeDispositionBytes(
+        actualDispositionBytes,
+        lockRecord,
+      );
+    } catch {}
+  }
+  return Object.freeze({
+    scenario: Object.freeze({ ...scenario }),
+    paths,
+    acknowledged: state.dispositionAcknowledged,
+    originalErrorPreserved: returnedError === originalError,
+    originalError: Object.freeze({
+      code: originalError.code,
+      message: originalError.message,
+      reason: originalError.reason ?? null,
+      causeReason: originalError.cause?.reason ?? null,
+    }),
+    lock: Object.freeze({
+      exists: actualLockBytes !== null,
+      bytes:
+        actualLockBytes === null ? null : actualLockBytes.toString('utf8'),
+      record: Object.freeze({ ...lockRecord }),
+    }),
+    sidecar: Object.freeze({
+      exists: actualDispositionBytes !== null,
+      bytes:
+        actualDispositionBytes === null
+          ? null
+          : actualDispositionBytes.toString('utf8'),
+      decoded:
+        decodedDisposition === null
+          ? null
+          : Object.freeze({ ...decodedDisposition }),
+    }),
+    retained: Object.freeze({
+      staging: await exists(paths.staging),
+      artifact: await exists(paths.artifact),
+      receipt: await exists(paths.receipt),
+    }),
+    leaseClosed,
+    journal: Object.freeze([...state.journal]),
+  });
+}
+
+async function exerciseRetentionScenario(sandboxRoot, mode) {
+  const tempRoot = await fsp.realpath(os.tmpdir());
+  const canonicalSandbox = await fsp.realpath(sandboxRoot);
+  const acceptedModes = [
+    'pre-lock-failure',
+    'termination-unconfirmed-pre-lock',
+    'staging-creation-collision',
+    'staging-authentication-failure',
+    'compiler-failure',
+    'linker-failure',
+    'probe-failure',
+    'retention-plan-authentication-failure',
+    'termination-unconfirmed',
+    'normal-deferral',
+    'lease-close-rejected',
+    'lease-close-timeout',
+    'lock-collision',
+    'sidecar-collision-post-lock',
+    ...CARRIER_FAULTS.filter((fault) => fault !== 'none').map(
+      (fault) => `lock-publication-${fault}`,
+    ),
+    ...CARRIER_FAULTS.filter((fault) => fault !== 'none').map(
+      (fault) => `terminal-publication-${fault}`,
+    ),
+  ];
+  if (
+    path.dirname(canonicalSandbox).toLowerCase() !== tempRoot.toLowerCase() ||
+    !path.basename(canonicalSandbox).startsWith('moxley-native-build-test-') ||
+    !acceptedModes.includes(mode)
+  ) {
+    throw buildError(
+      'MOXLEY_NATIVE_BUILD_TEST_SCOPE_INVALID',
+      'Injected native build test scope is invalid.',
+    );
+  }
+
   const release = path.join(canonicalSandbox, 'Release');
-  await fsp.mkdir(release, { recursive: false });
   const stagingName = `${STAGING_PREFIX}${'a'.repeat(32)}`;
   const paths = {
     release,
     staging: path.join(release, stagingName),
-    stagedAddon: path.join(release, stagingName, 'moxley-windows-reparse.node'),
+    stagedAddon: path.join(
+      release,
+      stagingName,
+      'moxley-windows-reparse.node',
+    ),
     stagedReceipt: path.join(
       release,
       stagingName,
       'moxley-windows-reparse.receipt.json',
+    ),
+    object: path.join(
+      release,
+      stagingName,
+      'moxley-windows-reparse.obj',
+    ),
+    compileResponse: path.join(
+      release,
+      stagingName,
+      'moxley-windows-reparse-compile.rsp',
+    ),
+    linkResponse: path.join(
+      release,
+      stagingName,
+      'moxley-windows-reparse-link.rsp',
     ),
     probeFile: path.join(
       release,
@@ -2501,112 +4075,238 @@ async function exercisePromotionScenario(sandboxRoot, mode) {
     artifact: path.join(release, 'moxley-windows-reparse.node'),
     receipt: path.join(release, 'moxley-windows-reparse.receipt.json'),
     lock: path.join(release, '.moxley-windows-reparse-build.lock'),
+    disposition: path.join(
+      release,
+      '.moxley-windows-reparse-build.disposition.json',
+    ),
   };
-  await fsp.mkdir(paths.staging, { recursive: false });
-  await fsp.writeFile(paths.stagedAddon, 'binary', { flag: 'wx' });
-  await fsp.writeFile(paths.stagedReceipt, '{}\n', { flag: 'wx' });
-  await fsp.writeFile(paths.probeFile, 'probe\n', { flag: 'wx' });
-  await fsp.writeFile(paths.lock, 'owned-lock\n', { flag: 'wx' });
-  const stageMetadata = await fsp.lstat(paths.staging, { bigint: true });
-  const lockMetadata = await fsp.lstat(paths.lock, { bigint: true });
-  const observations = {
-    receiptVerificationLockHeld: false,
-    artifactVerificationLockHeld: false,
-    finalProbeLockHeld: false,
-    stagingRemovedBeforeLock: false,
-    leaseClosed: false,
-  };
+  await fsp.mkdir(release, { recursive: false });
+  const releaseMetadata = await fsp.lstat(release, { bigint: true });
+  const key = repositoryKey(canonicalSandbox);
+  const pipeName = pipeNameForKey(key);
+  let leaseClosed = false;
+  let leaseAbandonCount = 0;
+  let leaseAbandoned = false;
+  const leaseCloseError = new Error('Injected lease close rejection.');
   const state = {
     paths,
     lease: {
       async close() {
-        observations.leaseClosed = true;
+        if (mode === 'lease-close-rejected') throw leaseCloseError;
+        if (mode === 'lease-close-timeout') return new Promise(() => {});
+        leaseClosed = true;
+      },
+      abandon() {
+        if (leaseAbandoned) return;
+        leaseAbandoned = true;
+        leaseAbandonCount += 1;
       },
     },
-    lockOwned: true,
-    lockIdentity: identityOf(lockMetadata),
-    stagingCreated: true,
-    stagingIdentity: identityOf(stageMetadata),
-    firstPromotionOccurred: false,
-    allowedStagingNames: new Set([
-      'moxley-windows-reparse.node',
-      'moxley-windows-reparse.receipt.json',
-      'moxley-windows-reparse-probe.txt',
-    ]),
+    lockOwned: false,
+    lockPublication: 'ABSENT',
+    lockIdentity: null,
+    lockRecord: null,
+    lockBytes: null,
+    dispositionCreated: false,
+    dispositionIdentity: null,
+    dispositionRecord: null,
+    dispositionBytes: null,
+    dispositionAcknowledged: false,
+    expectedDispositionRecord: null,
+    expectedDispositionBytes: null,
+    releaseIdentity: identityOf(releaseMetadata),
+    stagingCreated: false,
+    stagingIdentity: null,
+    allowedStagingNames: new Set(['moxley-windows-reparse.obj']),
+    journal: [],
   };
-  function injectedFailure(code, message) {
-    if (mode.startsWith('termination-unconfirmed-')) {
-      return terminationUnconfirmedError(
-        SUBPROCESS_REASONS.TERMINATION_NOT_CONFIRMED,
-        SUBPROCESS_REASONS.TIMEOUT,
+  const lockRecord = createV2LockRecord(
+    key,
+    pipeName,
+    stagingName,
+    'b'.repeat(32),
+  );
+  const lockBytes = Buffer.from(canonicalJson(lockRecord), 'utf8');
+
+  async function resultFor(triggeringError, caught) {
+    const actualLockBytes = await readExistingBytes(paths.lock);
+    const dispositionBytes = await readExistingBytes(paths.disposition);
+    let disposition = null;
+    if (dispositionBytes !== null) {
+      try {
+        disposition = decodeDispositionBytes(dispositionBytes, lockRecord);
+      } catch {}
+    }
+    return Object.freeze({
+      mode,
+      paths: Object.freeze(paths),
+      failed: true,
+      code: caught.code,
+      triggeringCode: triggeringError.code,
+      triggeringError,
+      caught,
+      originalErrorPreserved: caught === triggeringError,
+      leaseCloseError,
+      leaseClosed,
+      leaseAbandonCount,
+      lock: Object.freeze({
+        exists: actualLockBytes !== null,
+        bytes:
+          actualLockBytes === null ? null : actualLockBytes.toString('utf8'),
+      }),
+      disposition:
+        disposition === null ? null : Object.freeze({ ...disposition }),
+      dispositionBytes:
+        dispositionBytes === null ? null : dispositionBytes.toString('utf8'),
+      retained: Object.freeze({
+        staging: await exists(paths.staging),
+        artifact: await exists(paths.artifact),
+        receipt: await exists(paths.receipt),
+      }),
+      journal: Object.freeze([...state.journal]),
+    });
+  }
+
+  async function handle(triggeringError) {
+    let caught;
+    try {
+      await handleBuildFailure(state, triggeringError);
+    } catch (error) {
+      caught = error;
+    }
+    if (caught === undefined) {
+      throw buildError(
+        'MOXLEY_NATIVE_BUILD_TEST_FAILED',
+        'Injected native build scenario did not terminate.',
       );
     }
-    return buildError(code, message);
+    return resultFor(triggeringError, caught);
   }
-  const hooks = {
-    beforeBinaryPromotion:
-      mode === 'pre' || mode === 'termination-unconfirmed-pre'
-        ? async () => {
-            throw injectedFailure(
-              'MOXLEY_NATIVE_BUILD_INJECTED_FAILURE',
-              'Injected pre-promotion failure.',
-            );
-          }
-        : undefined,
-    afterBinaryPromotion:
-      mode === 'post' || mode === 'termination-unconfirmed-post'
-        ? async () => {
-            throw injectedFailure(
-              'MOXLEY_NATIVE_BUILD_INJECTED_FAILURE',
-              'Injected post-promotion failure.',
-            );
-          }
-        : undefined,
-    beforeLockRelease: async () => {
-      observations.stagingRemovedBeforeLock =
-        !(await exists(paths.staging)) && (await exists(paths.lock));
-    },
-  };
-  try {
-    await promoteAndFinalize({
-      state,
-      expected: {},
-      hooks,
-      verifyFinalReceipt: async () => {
-        observations.receiptVerificationLockHeld = await exists(paths.lock);
-      },
-      verifyFinalArtifact: async () => {
-        observations.artifactVerificationLockHeld = await exists(paths.lock);
-        return { byteLength: 6, sha256: sha256(Buffer.from('binary')) };
-      },
-      probeFinal: async () => {
-        observations.finalProbeLockHeld = await exists(paths.lock);
-      },
-    });
-    return { mode, paths, observations, failed: false };
-  } catch (error) {
+
+  if (mode === 'pre-lock-failure' || mode === 'termination-unconfirmed-pre-lock') {
+    const triggeringError =
+      mode === 'termination-unconfirmed-pre-lock'
+        ? terminationUnconfirmedError(
+            SUBPROCESS_REASONS.TERMINATION_NOT_CONFIRMED,
+            SUBPROCESS_REASONS.TIMEOUT,
+          )
+        : buildError(
+            'MOXLEY_NATIVE_BUILD_INJECTED_FAILURE',
+            'Injected pre-lock failure.',
+          );
+    return handle(triggeringError);
+  }
+
+  if (mode === 'lock-collision') {
+    await fsp.writeFile(paths.lock, 'preexisting-lock\n', { flag: 'wx' });
+    let triggeringError;
     try {
-      await handleBuildFailure(state, error);
-    } catch (handled) {
-      return {
-        mode,
-        paths,
-        observations,
-        failed: true,
-        code: handled.code,
-        reason: handled.reason,
-        terminationConfirmed: handled.terminationConfirmed,
-        causeReason:
-          handled.cause && typeof handled.cause.reason === 'string'
-            ? handled.cause.reason
-            : undefined,
-      };
+      await acquireV2Lock(state, lockRecord, lockBytes);
+    } catch (error) {
+      triggeringError = error;
+    }
+    return handle(triggeringError);
+  }
+
+  if (mode.startsWith('lock-publication-')) {
+    const fault = mode.slice('lock-publication-'.length);
+    const control = Object.freeze({
+      token: CARRIER_TEST_CONTROL_TOKEN,
+      fault,
+    });
+    let triggeringError;
+    try {
+      await acquireV2Lock(state, lockRecord, lockBytes, control);
+    } catch (error) {
+      triggeringError = error;
+    }
+    return handle(triggeringError);
+  }
+
+  await acquireV2Lock(state, lockRecord, lockBytes);
+
+  if (mode === 'sidecar-collision-post-lock') {
+    await fsp.writeFile(paths.disposition, 'preexisting-sidecar\n', {
+      flag: 'wx',
+    });
+    return handle(
+      buildError(
+        'MOXLEY_NATIVE_BUILD_COLLISION',
+        'Generated native output already exists; run explicit clean.',
+      ),
+    );
+  }
+
+  let triggeringError = null;
+  if (mode === 'staging-creation-collision') {
+    await fsp.mkdir(paths.staging, { recursive: false });
+    try {
+      await createOwnedStagingDirectory(state);
+    } catch (error) {
+      triggeringError = error;
+    }
+  } else {
+    if (mode === 'staging-authentication-failure') {
+      state[STAGING_AUTH_TEST_ERROR] = buildError(
+        'MOXLEY_NATIVE_BUILD_STAGE_INVALID',
+        'Native build staging identity changed.',
+      );
+    }
+    try {
+      await createOwnedStagingDirectory(state);
+    } catch (error) {
+      triggeringError = error;
     }
   }
-  throw buildError(
-    'MOXLEY_NATIVE_BUILD_TEST_FAILED',
-    'Injected native build scenario did not terminate.',
-  );
+
+  if (triggeringError === null) {
+    await fsp.writeFile(paths.object, 'object', { flag: 'wx' });
+    const failures = Object.freeze({
+      'compiler-failure': buildError(
+        'MOXLEY_NATIVE_BUILD_SUBPROCESS_FAILED',
+        'Injected compiler failure.',
+      ),
+      'linker-failure': buildError(
+        'MOXLEY_NATIVE_BUILD_SUBPROCESS_FAILED',
+        'Injected linker failure.',
+      ),
+      'probe-failure': buildError(
+        'MOXLEY_NATIVE_BUILD_PROBE_FAILED',
+        'Injected staged probe failure.',
+      ),
+      'retention-plan-authentication-failure': buildError(
+        'MOXLEY_NATIVE_BUILD_INJECTED_FAILURE',
+        'Injected failure before retention authentication.',
+      ),
+      'termination-unconfirmed': terminationUnconfirmedError(
+        SUBPROCESS_REASONS.TERMINATION_NOT_CONFIRMED,
+        SUBPROCESS_REASONS.TIMEOUT,
+      ),
+      'normal-deferral': physicalCleanupDeferredError(),
+      'lease-close-rejected': physicalCleanupDeferredError(),
+      'lease-close-timeout': physicalCleanupDeferredError(),
+    });
+    triggeringError =
+      failures[mode] ??
+      buildError(
+        'MOXLEY_NATIVE_BUILD_INJECTED_FAILURE',
+        'Injected terminal publication failure.',
+      );
+  }
+
+  if (mode === 'retention-plan-authentication-failure') {
+    state[RETENTION_PLAN_TEST_ERROR] = buildError(
+      'MOXLEY_NATIVE_BUILD_STAGE_INVALID',
+      'Native build retained state could not be authenticated.',
+    );
+  }
+  if (mode.startsWith('terminal-publication-')) {
+    state[TERMINAL_CARRIER_TEST_CONTROL] = Object.freeze({
+      token: CARRIER_TEST_CONTROL_TOKEN,
+      fault: mode.slice('terminal-publication-'.length),
+    });
+  }
+  return handle(triggeringError);
 }
 
 async function exists(target) {
@@ -2646,7 +4346,9 @@ function formatDiagnostic(error) {
 
 const internal = Object.freeze({
   ARTIFACT_RELATIVE,
+  DISPOSITION_RELATIVE,
   LOCK_RELATIVE,
+  MAX_CARRIER_BYTES,
   PACKAGE_ROOT,
   RECEIPT_RELATIVE,
   STAGING_FILE_NAMES,
@@ -2655,9 +4357,14 @@ const internal = Object.freeze({
   assertNoReparse,
   authenticatePath,
   canonicalJson,
+  classifyLockCarrierBytes,
   createLockRecord,
+  createDispositionRecord,
+  createV2LockRecord,
   decodeCanonicalJson,
+  decodeDispositionBytes,
   decodeLockBytes,
+  decodeV2LockBytes,
   exists,
   exactKeys,
   formatDiagnostic,
@@ -2667,32 +4374,57 @@ const internal = Object.freeze({
   ordinalCompare,
   packagePaths,
   pipeNameForKey,
+  readBoundedCarrier,
   repositoryKey,
   sameIdentity,
   sameWindowsPath,
   sha256,
   validateLockRecord,
+  validateV2LockRecord,
 });
 
 module.exports = Object.freeze({
   internal,
   __test: Object.freeze({
     AUTHENTICATION_TIMEOUT_MS,
+    DIAGNOSTIC_PHASES,
     EXIT_CLOSE_GRACE_MS,
+    LEASE_CLOSE_TIMEOUT_MS,
+    MAX_ACTIVE_OBJECTS,
+    MAX_ACTIVE_TYPES,
+    MAX_DIAGNOSTIC_OUTPUT_BYTES,
+    MAX_DIAGNOSTIC_RECORD_BYTES,
+    MAX_DIAGNOSTIC_RECORDS,
     MAX_PROCESS_OUTPUT_BYTES,
     POST_TERMINATION_GRACE_MS,
     PROCESS_TIMEOUT_MS,
     PROBE_TIMEOUT_MS,
     TASKKILL_TIMEOUT_MS,
     authenticateBuildInputs,
+    authenticateHost,
+    authenticateRegularFile,
+    captureActiveEvidence,
+    compareActiveEvidence,
+    createActiveDeltaEvidence,
+    createDiagnosticControl,
     createReceipt,
     decodeReceiptBytes,
-    exercisePromotionScenario,
+    emitDiagnosticPhase,
+    exerciseCarrierScenario,
+    exerciseRetentionScenario,
+    parseDiagnosticPhaseStream,
     requireProcessSuccess: requireProcessSuccessForTest,
     repositoryLeaseIdentity,
     runBuild,
+    runBuildForDiagnostic,
     runProcess: runProcessForTest,
+    sanitizeActiveObjects,
+    supervisorFailureSnapshot,
+    validateActiveDeltaEvidence,
     validateReceipt,
+    validateSupervisorFailureSnapshot,
+    validateHostEvidence,
+    validateNodeRuntimeInputs,
   }),
 });
 

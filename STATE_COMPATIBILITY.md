@@ -1559,7 +1559,7 @@ The following are **observed facts**:
 - the repository and future original Moxley work are Apache-2.0 licensed under
   the ownership record in `LICENSING.md`;
 - the decision host reports `win32`, `x64`, Node `v24.13.0`, Windows 11 Home
-  version 25H2 build `26200.8875`, and a fixed local NTFS volume for both the
+  version 25H2 build `26200.9168`, and a fixed local NTFS volume for both the
   repository and task-temporary characterization;
 - `Get-ComputerInfo` identifies the host as Windows 11 Home while the legacy
   `CurrentVersion.ProductName` registry field reports Windows 10 Home; the
@@ -1716,7 +1716,7 @@ The initial future qualification target is deliberately narrow:
 
 This is not current runtime support and does not change `package.json`
 `engines`, package version, dependency metadata, or release policy. The live
-characterization is specifically Windows 11 Home 25H2 build `26200.8875`,
+characterization is specifically Windows 11 Home 25H2 build `26200.9168`,
 x64, Node `v24.13.0`, on fixed local NTFS. It does not by itself qualify every
 Windows 11 edition, build, storage provider, or NTFS deployment.
 
@@ -1887,14 +1887,18 @@ absent. The production source remains original Moxley code under Apache-2.0.
 - generated receipt:
   `build/Release/moxley-windows-reparse.receipt.json`; and
 - generated exclusive build lock:
-  `build/Release/.moxley-windows-reparse-build.lock`.
+  `build/Release/.moxley-windows-reparse-build.lock`; and
+- generated terminal disposition sidecar:
+  `build/Release/.moxley-windows-reparse-build.disposition.json`.
 
 The three source paths exist. Only an explicit build or isolated test lifecycle
-creates the generated binary, receipt, lock, or staging directory. They remain
-ignored and untracked; successful clean and test completion leave them absent,
-while bounded failure and crash policies can preserve them as evidence.
+creates the generated binary, receipt, lock, disposition sidecar, or staging
+directory. Those generated paths remain ignored and untracked; successful clean
+and test completion leave them absent, while bounded failure and crash policies
+can preserve them as evidence.
 
-**Selected future contract:** The one additional fixed private evidence path is:
+**Currently implemented private contract:** The fixed private disposition
+evidence path is:
 
 ```text
 build/Release/.moxley-windows-reparse-build.disposition.json
@@ -1962,11 +1966,12 @@ tests invoke the same explicit build driver and clean all output. No runtime or
 package command downloads headers, compilers, SDKs, prebuilds, or binaries.
 
 **Currently implemented boundary:** `package.json` contains the two explicit
-commands and the serial test command. It has no lifecycle script. There is no
+commands and the aggregate test command. It has no lifecycle script. There is no
 `binding.gyp`, so package installation has no implicit repository addon build
 input.
 
-**Selected future contract:** `clean:native:windows` remains zero-argument.
+**Currently implemented private contract:** `clean:native:windows` remains
+zero-argument.
 Invoking the operator command does not supply independent proof or cleanup
 authority. No force or confirmation flag, environment override, token, nonce
 echo, prompt, PID inventory, elapsed-time threshold, reboot acknowledgement, or
@@ -1997,21 +2002,27 @@ driver:
 - never writes intermediate output outside that staging directory;
 - loads and probes the staged addon in a bounded child process before promotion;
   and
-- applies the phase-specific cleanup authority in section 63: a handled failure
-  before the first final promotion may remove only the exact authenticated
-  staging directory and exact owned lock, while a failure at or after the first
-  final promotion preserves final-output and lock evidence.
+- applies the phase-specific cleanup authority in sections 63 and 80: an
+  ordinary handled failure before the first final promotion publishes positive
+  authority before exact build-owned cleanup, while ordinary post-promotion and
+  termination-unconfirmed failures preserve their exact terminal evidence.
 
-**Selected future contract:** Section 80 supersedes that current failure path
-where persistent disposition is required. An ordinary handled failure after v2
+**Currently implemented private contract:** Section 80 supersedes the earlier
+failure path where persistent disposition is required. An ordinary handled failure after v2
 lock acquisition must persist and verify `CLEAN_AUTHORIZED` before build-owned
 cleanup may begin. Termination-unconfirmed after v2 lock acquisition instead
 attempts its exact terminal sidecar while the lease remains open and preserves
-every retained subset. A failure before lock acquisition creates no carrier or
-repository mutation.
+every retained subset. Every failing build returns its original error; cleanup
+planning, cleanup execution, carrier publication, and acknowledgement failures
+cannot replace that primary error. Before successful v2 lock acquisition, the
+build may establish authenticated ordinary `build` and `build/Release`
+directories after starting its lease. Such a failure owns no lock carrier,
+creates no terminal sidecar or cleanup authority, and creates no staging,
+generated artifact, receipt, or promoted output. Empty directory establishment
+is not persistence, recovery, or cleanup authority.
 
 **Currently implemented boundary:** The exact authenticated build target is
-Windows 11 Home 25H2 build `26200.8875`, `win32` / `x64`, fixed local NTFS,
+Windows 11 Home 25H2 build `26200.9457`, `win32` / `x64`, fixed local NTFS,
 Node `v24.13.0`, modules ABI 137, Node runtime Node-API 10, and the stable
 Node-API version 8 addon surface. The accepted toolchain evidence is Visual
 Studio Build Tools `17.14.37516.0`, MSVC tools `14.44.35207`, `cl.exe`
@@ -2043,32 +2054,40 @@ does not overwrite or silently replace an existing final binary, receipt, or
 lock. If either final output already exists, the build fails and instructs the
 operator to run the explicit clean command first. Concurrent builds are
 unsupported and fail through exclusive creation of the exact lock file. An
-abandoned lock is not automatically removed. Under the current implementation,
-the explicit clean command is the only provided recovery for an abandoned
-task-owned lock. Section 80 supersedes pipe absence as future cleanup authority:
-only an exact authenticated v2 `CLEAN_AUTHORIZED` carrier permits retained-state
-removal. No retry loop or automatic recovery is approved.
+abandoned lock is not automatically removed. The explicit clean command is the
+only provided cleanup command, but it does not recover or remove abandoned
+indeterminate evidence: exact v1, v2 `ACTIVE`, and v2
+`TERMINATION_UNCONFIRMED` states require indefinite retention. Only an exact
+authenticated v2 `CLEAN_AUTHORIZED` carrier permits retained-state removal. No
+recovery interface, retry loop, or automatic recovery is approved.
 
 **Currently implemented boundary:** The build sequence is exactly:
 
 1. Authenticate the platform, filesystem boundary, toolchain, SDK, Node
    inputs, production source, package-relative output paths, and output
    containment.
-2. Acquire the exclusive build lock through collision-failing creation.
-3. Require both final output paths to be absent.
-4. Create and authenticate one exact task-owned staging directory on the same
+2. Before starting the lease or creating the v2 lock, perform an authenticated
+   read-only collision preflight that requires the fixed disposition sidecar,
+   final binary, and final receipt paths all to be absent.
+3. Start the cooperating lease, establish or reauthenticate the ordinary
+   `build` and `build/Release` directories, construct the exact v2 lock, and
+   acquire it through collision-failing creation. A failure before successful
+   acquisition may leave only the authenticated empty directories.
+4. Recheck the fixed sidecar and both final output paths while the lock is held
+   so a race collision preserves the lock and every pre-existing byte.
+5. Create and authenticate one exact task-owned staging directory on the same
    fixed local NTFS volume as the final output.
-5. Compile and link all intermediate output within staging.
-6. Load and characterize the staged addon in a bounded child process.
-7. Produce and validate the canonical receipt in staging.
-8. Immediately before promotion, require both final output paths still to be
+6. Compile and link all intermediate output within staging.
+7. Load and characterize the staged addon in a bounded child process.
+8. Produce and validate the canonical receipt in staging.
+9. Immediately before promotion, require both final output paths still to be
    absent.
-9. Promote the binary into its absent final destination with a
+10. Promote the binary into its absent final destination with a
    collision-failing same-volume hard-link creation, then remove the staged
    link.
-10. Promote the receipt by the same no-replace hard-link operation, then remove
+11. Promote the receipt by the same no-replace hard-link operation, then remove
     the staged link.
-11. While the exclusive lock is still held:
+12. While the exclusive lock is still held:
     - reopen the final receipt;
     - require exact canonical bytes, schema, versions, paths, types, and
       framing;
@@ -2077,10 +2096,10 @@ removal. No retry loop or automatic recovery is approved.
     - require an exact match to the final receipt;
     - load and probe the final addon in a bounded child process; and
     - require the exact native export and classification contract.
-12. Remove the authenticated staging directory.
-13. Release the exclusive build lock last.
-14. Close the named-pipe lease.
-15. Return build success without performing another acceptance check outside
+13. Remove the authenticated staging directory.
+14. Release the exclusive build lock last.
+15. Close the named-pipe lease.
+16. Return build success without performing another acceptance check outside
     the lock.
 
 **Currently implemented boundary:** No cooperating build or clean command may
@@ -2096,45 +2115,63 @@ NTFS boundary. The binary/receipt pair is not transactionally atomic. A crash
 between promotions leaves an incomplete pair, which the selected future loader
 must reject.
 
-**Currently implemented boundary — before the first final promotion:** For a
-handled failure after acquiring the lock but before step 9, the build removes
-only the exact authenticated staging directory if it was created, releases only the
-exact owned lock, leaves both final output paths absent, reports failure, and
-does not retry. If safe staging cleanup or lock release fails, it reports the
-cleanup failure and fails without broadening cleanup.
+**Currently implemented boundary — before the first final promotion:** For an
+ordinary handled failure after verified v2 lock acquisition but before step 9,
+the build finalizes every cleanup predicate, publishes exact
+`CLEAN_AUTHORIZED`, and then locally removes only authenticated staging,
+sidecar, and owned lock evidence in the section 80 order. It reports failure and
+does not retry. Writer uncertainty preserves every retained subset and the
+original error. Termination-unconfirmed instead attempts only its exact
+negative sidecar and preserves everything.
+
+Cleanup planning, local cleanup execution, positive or negative carrier
+publication, and publication acknowledgement are subordinate failure handling.
+None may replace the original build error. If cleanup planning itself becomes
+termination-unconfirmed, the build attempts the negative sidecar using that
+cleanup failure's causal reason, preserves all state, closes the lease after
+the attempt, and still returns the original build error. If exact positive
+`CLEAN_AUTHORIZED` publication succeeds, physical cleanup is progressive and
+nontransactional: the build removes authenticated staging, then the authenticated
+sidecar, then the owned lock. A later failure does not restore already removed
+targets. In particular, failure after sidecar removal but before lock removal
+leaves staging and sidecar absent with the canonical `ACTIVE` v2 lock retained.
+Only not-yet-removed state is promised retained. The build closes the lease,
+returns the original build error, and claims no atomicity, recovery, retry, or
+cleanup success.
 
 **Currently implemented boundary — at or after the first final promotion:**
-For a handled failure at or after step 9, the build does not delete, overwrite,
-replace, or roll back either final output; does not report build success;
-leaves the lock present as incomplete-build evidence; preserves any incomplete
-binary/receipt pair; and stops without retry. A later explicit clean command is
-required under the current implementation. The current clean command uses the
-deterministic lease pipe as its cooperating-build activity evidence. Section 80
-selects a bound disposition carrier and stronger evidence and preservation
-requirements; a retained lock without `CLEAN_AUTHORIZED` is not future cleanup
-authority.
+For an ordinary handled failure at or after step 9, the build publishes exact
+`CLEAN_AUTHORIZED`, does not delete, overwrite, replace, or roll back either
+final output, preserves the carrier and any incomplete binary/receipt pair, and
+stops without retry. Termination-unconfirmed publishes only its exact negative
+state and also preserves every retained subset. A later explicit clean may
+remove state only from an exact authenticated positive pair; pipe absence is
+not cleanup authority.
 
 **Currently implemented boundary — crash behavior:** A process crash may leave
 staging, the lock, only the final binary, both final outputs without completed
 verification, or another incomplete subset of generated state. The selected
 future loader must reject every missing, incomplete, invalid, or mismatched
-final pair. Under the current implementation, the explicit clean command is the
-only provided recovery. Section 80 instead selects indefinite retention for a
-crash-retained indeterminate lock and permits later explicit clean only for a
-valid v2 `CLEAN_AUTHORIZED` carrier. No rollback, automatic repair, stale-lock
-timeout, PID-reuse inference, retry, or resume is selected.
+final pair. The current clean command retains crash-retained v2 `ACTIVE`, exact
+v1, negative, missing, partial, invalid, orphaned, and unbound evidence
+indefinitely. Only a valid v2 `CLEAN_AUTHORIZED` carrier permits later explicit
+clean. No rollback, automatic repair, stale-lock timeout, PID-reuse inference,
+retry, or resume is selected.
 
-**Currently implemented boundary:** The build starts the deterministic
-package-root-derived Windows named-pipe lease before exclusively creating the
-exact canonical lock file. It then creates one random
+**Currently implemented boundary:** Before starting the deterministic
+package-root-derived Windows named-pipe lease, the build authenticates the
+fixed paths and read-only collision-checks the disposition sidecar, final
+binary, and final receipt. It then starts the lease, establishes or
+reauthenticates ordinary `build` and `build/Release`, exclusively creates and
+authenticates the exact canonical lock file, and rechecks all three paths to
+cover races before creating one random
 `.moxley-windows-reparse-stage-<32 lowercase hex>` directory directly under
 `build/Release`. Clean connects once to the exact pipe recorded by a strictly
 validated lock: a successful connection is current cooperating-build evidence;
-an absent pipe makes the validated lock abandoned evidence under the current
-implementation. Neither driver uses PID, age, staleness, wait, retry, or
-PID-reuse inference.
+an absent pipe advances only to authenticated carrier classification. Neither
+driver uses PID, age, staleness, wait, retry, or PID-reuse inference.
 
-**Selected future contract:** Pipe absence never reclassifies `ACTIVE`,
+**Currently implemented private contract:** Pipe absence never reclassifies `ACTIVE`,
 `TERMINATION_UNCONFIRMED`, or legacy v1 evidence as cleanup-authorizing. A
 pre-existing lock or disposition sidecar remains a collision and must not be
 overwritten, adopted, or repaired by a new build.
@@ -2231,18 +2268,16 @@ attacker who can replace both the binary and receipt.
 
 **Currently implemented boundary:** The clean driver resolves every path from
 the Moxley package root, never from the current working directory. It may operate
-only on the exact generated binary, receipt, and lock paths from section 59. It
-may additionally remove only the exact authenticated staging directory created
-by the build driver.
+only on the exact generated binary, receipt, lock, and disposition-sidecar paths
+from section 59. It may additionally remove only the exact authenticated staging
+directory created by the build driver.
 
-**Currently implemented boundary:** Under the current v1 implementation,
-explicit clean is the only provided recovery for post-promotion or
-crash-retained incomplete generated state and an abandoned lock. It is not
-invoked automatically by the build. Its one-time failed lease connection can
-currently lead to removal without a persisted terminal disposition; section 80
-records the selected replacement for that known mismatch.
+**Historical boundary:** Under the earlier v1 implementation, explicit clean
+could remove post-promotion or crash-retained incomplete generated state after
+one failed lease connection without a persisted terminal disposition. Section
+80 replaces that known mismatch.
 
-**Selected future contract:** Clean may add only the fixed disposition sidecar
+**Currently implemented private contract:** Clean adds only the fixed disposition sidecar
 from section 59 to its exact private scope. After existing path, type, identity,
 containment, lock, staging, and inventory safety authentication succeeds, a live
 cooperating lease continues to return `MOXLEY_NATIVE_CLEAN_BUSY`. Lease absence
@@ -2257,20 +2292,21 @@ link, junction, detectable reparse point, unexpected filesystem type,
 containment mismatch, unauthenticated staging directory, or unknown staging
 entry. It must never recursively delete `build`, `build/Release`, the
 repository, a home directory, or an unresolved path. Unrelated entries outside
-the exact generated targets are not deletion authority. The current clean
-fails when its one-time lease connection finds an active cooperating build; an
-absent pipe permits it to continue to path authentication. That check is not
-independent process-tree proof. Clean reports exactly what it removed and
-treats already-absent exact outputs as idempotent success.
+the exact generated targets are not deletion authority. Clean fails when its
+one-time lease connection finds an active cooperating build; an absent pipe
+permits only carrier classification after the complete safety boundary. That
+check is not independent process-tree proof. Clean reports exactly what it
+removed and treats already-absent exact outputs as idempotent success.
 
-**Currently implemented boundary:** The canonical lock contains only its exact
+**Currently implemented boundary:** Each canonical lock contains only its exact
 format/version, package-root repository key, deterministic pipe name, one
-relative staging name, and a lowercase random nonce. Clean strictly validates
-that record, the non-following metadata and identity of every approved target,
-the staging inventory, and post-removal absence. Its success output contains
-only ordinal repository-relative approved paths.
+relative staging name, and a lowercase random nonce; v2 adds only the immutable
+`disposition: "ACTIVE"` field. Clean strictly validates that record, the
+non-following metadata and identity of every approved target, the staging
+inventory, and post-removal absence. Its success output contains only ordinal
+repository-relative approved paths.
 
-**Selected future contract:** New builds create only the immutable v2 `ACTIVE`
+**Currently implemented private contract:** New builds create only the immutable v2 `ACTIVE`
 lock selected in section 80. The optional terminal sidecar is a separate
 write-once file and never mutates, replaces, appends to, or upgrades that lock.
 Clean and operators never write either record.
@@ -2482,8 +2518,9 @@ binary before it has been loaded. JavaScript `lstat` cannot prove absence of
 every generic Windows reparse category. PR #25 proves only bounded test-worker
 loading and classification on the accepted host.
 
-**Explicit nonclaim:** No production loader or production runtime behavior is
-implemented by this documentation-only contract.
+**Explicit nonclaim:** This private build/clean slice implements no production
+loader or production runtime behavior. The selected loader contract remains
+future work.
 
 **Explicit nonclaim:** Receipt hashing and package-relative resolution do not
 defend against an attacker who can replace both the binary and receipt.
@@ -2501,7 +2538,7 @@ binary distribution is approved. Source-build distribution policy remains a
 later release decision. The first implementation is repository-development
 only on the exact qualified host.
 
-**Selected future contract:** The fixed disposition sidecar is also ignored,
+**Currently implemented private contract:** The fixed disposition sidecar is also ignored,
 untracked local build evidence. Adding that private wire does not add a package
 file, database-state format, install artifact, release asset, or distribution
 decision.
@@ -2522,11 +2559,11 @@ state.
 
 ## 70. Explicitly deferred implementation and integration
 
-**Deferred implementation:** The completed build/clean and bounded-subprocess
-slices and this documentation-only persistent-disposition decision still defer:
+**Deferred implementation:** The implemented build/clean and bounded-subprocess
+slices, plus the final-validation-pending persistent-disposition slice, still
+defer:
 
 - loader code and loader tests;
-- v2 lock, disposition-sidecar, fail-closed clean code, and their tests;
 - `index.js` changes or public exports;
 - traversal integration;
 - persisted-format loading;
@@ -2542,26 +2579,29 @@ slices and this documentation-only persistent-disposition decision still defer:
 - migration; and
 - npm publication.
 
-**Explicit nonclaim:** The implemented build/clean and bounded-subprocess
-boundaries and selected future loader and disposition contracts do not select
-the complete accepted persisted schema, collection or executable-content
+**Explicit nonclaim:** The implemented build/clean, bounded-subprocess, and
+persistent-disposition boundaries and selected future loader contract do not
+select the complete accepted persisted schema, collection or executable-content
 policy, public open/create API, traversal error mapping, database locking,
 write protocol, recovery, durability, migration, adapter behavior, or Thoth
 behavior. Indefinite retention is a fail-stop policy, not crash recovery.
 
-## 71. Documentation-only delta and continuing qualification no-go
+## 71. Section 80 implementation delta and continuing qualification no-go
 
-**Documentation-only Phase C boundary:** This contract changes only
-`STATE_COMPATIBILITY.md`. It adds no test, production source, native source,
-manifest, lockfile, dependency, package version, fixture, binary, build output,
-generated receipt, lock, or disposition sidecar. The current baseline is 66
-tests, 15 tracked JavaScript/CJS/MJS files, one production C file, 19 persisted
-fixtures, three Markdown files, and two manifests.
+**Currently implemented boundary:** The isolated section 80 repair changes
+exactly `scripts/build-windows-native.cjs`,
+`scripts/clean-windows-native.cjs`, `test/windows-native-build.test.cjs`, and
+`STATE_COMPATIBILITY.md`. It adds 14 focused lifecycle tests and changes no
+native source, manifest, lockfile, dependency, package version, fixture, or
+public entry point. The current baseline is 80 tests, 15 tracked
+JavaScript/CJS/MJS files, one production C file, 19 persisted fixtures, three
+Markdown files, and two manifests.
 
-**Selected future contract:** Policy, current characterization evidence,
+**Currently implemented private contract:** Policy, characterization evidence,
 implemented boundaries, deferred implementation, and nonclaims remain
-separate. A future implementer must satisfy every selected gate without citing
-this documentation as current enforcement.
+separate. The implementation is designed to satisfy the selected private
+section 80 gates but remains pending final ordered validation; this status does
+not extend them into public API or production qualification.
 
 **Explicit nonclaim:** Complete Windows version-1 qualification remains
 **no-go**. This document does not claim TOCTOU resistance, hostile-local-user
@@ -2573,28 +2613,31 @@ parent-directory or power-loss durability, or external acknowledgement.
 
 ## 72. Next independently testable boundary
 
-**Currently implemented boundary:** The bounded subprocess-supervision contract
+**Historical implemented boundary:** The bounded subprocess-supervision contract
 was squash-merged as
 `32377bd1bb34c7ad09dbb26684b2fd0637f929ac`; its isolated implementation was
 squash-merged as `d467771ad42b314f28af22ed01b4769be946b700` with subject
 `Harden native subprocess supervision (#31)`. The implementation changes only
 `scripts/build-windows-native.cjs`, `test/windows-native-build.test.cjs`, and
-`test/windows-native-subprocess.test.cjs`. The current focused baselines are
-subprocess 6/6 and native build/clean lifecycle 10/10; the full suite is 66/66.
+`test/windows-native-subprocess.test.cjs`. Before the section 80 repair, its
+focused baselines were subprocess 6/6 and native build/clean lifecycle 10/10;
+the full suite was 66/66.
 
-**Observed unresolved gate:** The merged failure handler closes the cooperating
-lease after termination-unconfirmed without first persisting a terminal
-disposition. Current clean can then treat one unsuccessful pipe connection as
-sufficient to proceed to authenticated removal. That is the unresolved
-persistent-disposition and cleanup-authority mismatch selected for repair in
-section 80; passing current tests characterize the implementation and do not
-resolve it.
+**Historical gate repaired by the current slice:** The merged failure handler
+closed the cooperating lease after termination-unconfirmed without first
+persisting a terminal disposition. Clean could then treat one unsuccessful pipe connection as
+sufficient to proceed to authenticated removal. The current four-path slice
+implements section 80's persistent disposition and cleanup authority. Its
+previous packet was validated at subprocess 6/6, native build/clean lifecycle
+24/24, and full suite 80/80. Those results describe only that previous packet;
+this independent-review blocker repair requires fresh ordered validation and
+does not inherit those results.
 
-**Deferred implementation:** Only after this Phase C decision contract is
-reviewed and merged may a separately authorized isolated slice implement
+**Currently implemented boundary:** The Phase C decision contract was reviewed
+and merged before this separately authorized isolated slice implemented
 section 80 in the private build and clean tooling and their focused lifecycle
-tests. It must not touch, rebase, or amend PR #28, add a public API, or claim
-traversal, recovery, durability, or qualification.
+tests. The slice does not touch, rebase, or amend PR #28, add a public API, or
+claim traversal, recovery, durability, or qualification.
 
 **Selected future contract:** Only after that disposition/clean repair is
 independently reviewed and merged may PR #28 be rebased and its loader harness
@@ -2639,21 +2682,22 @@ that contract and was squash-merged as
 reasons, fixed bounds, single-settlement state machine, and bounded source-free
 Windows tree-termination attempt are recorded in sections 76 through 79.
 
-**Authority audit:** This policy audit inspected complete
+**Historical authority audit:** This policy audit inspected complete
 `STATE_COMPATIBILITY.md`, the complete build and clean drivers, the native-build
 lifecycle tests, the merged subprocess-characterization tests, the complete
 private-loader candidate and harness from PR #28 without changing them, and PR
 #27 through PR #31 history and descriptions. It also inspected the primary
 Node.js and Microsoft sources recorded in section 75. Authoritative `master`
-contains 66 tests, 15 tracked JavaScript/CJS/MJS files, one production C file,
-19 persisted fixtures, three Markdown files, and two manifests.
+then contained 66 tests, 15 tracked JavaScript/CJS/MJS files, one production C
+file, 19 persisted fixtures, three Markdown files, and two manifests.
 
-**Observed unresolved gate:** PR #31 does not persist terminal disposition
-evidence before closing the lease after termination-unconfirmed, and current
-clean can proceed after one unsuccessful pipe connection. Section 80 selects
-the missing carrier and cleanup authority. This is a post-merge P1 repair gate,
-not evidence that the subprocess state machine in sections 76 through 79 is
-unimplemented.
+**Historical gate and current repair boundary:** PR #31 did not persist terminal
+disposition evidence before closing the lease after termination-unconfirmed,
+and clean could proceed after one unsuccessful pipe connection. The current
+four-path slice implements section 80's carrier and cleanup authority while
+leaving the subprocess state machine in sections 76 through 79 unchanged. The
+repair remains separately gated from PR #28 until independently reviewed and
+merged.
 
 **Blocked candidate evidence:** PR #28 remains unchanged, open, draft, and
 unmerged at head `c019e83b21784135c5b171a5f104b2b96418ab07` on branch
@@ -2699,8 +2743,9 @@ and 23.9 seconds.
 **Currently implemented boundary:** PR #31 distinguishes spawn failure,
 nonzero or signal exit, timeout, per-stream output overflow, exit without close,
 and termination-unconfirmed under the closed reasons and fixed bounds in
-sections 76 through 79. Its focused subprocess suite passes 6/6. Those results
-do not establish persistent disposition or cleanup authority.
+sections 76 through 79. Historical PR #31 validation passed its focused
+subprocess suite 6/6. Those historical results do not establish persistent
+disposition or cleanup authority.
 
 **Inference:** The selected and implemented 90-second authentication bound
 supplies headroom over the observed 23.9-second sample. The historical 30-second
@@ -2966,22 +3011,26 @@ processes, or a compromised executable. An absolute System32 path is not
 cryptographic executable authentication. Taskkill completion is not itself
 proof that the original child exited or that its streams closed.
 
-## 80. Selected cleanup, lock, and lease consequences
+## 80. Implemented cleanup, lock, and lease consequences
 
-**Observed current mismatch:** At baseline
+**Historical mismatch repaired by the current slice:** At baseline
 `d467771ad42b314f28af22ed01b4769be946b700`, the v1 lock has exactly its six
 existing fields and no persistent disposition. A termination-unconfirmed build
-closes the cooperating lease and throws while preserving generated evidence.
-Current clean can then treat one unsuccessful pipe connection as sufficient to
-continue to authenticated removal. That behavior implements neither the
-carrier nor the cleanup authority selected in this section.
+closed the cooperating lease and threw while preserving generated evidence.
+Clean could then treat one unsuccessful pipe connection as sufficient to
+continue to authenticated removal. The current four-path implementation adds
+the carrier and cleanup authority selected in this section.
 
-**Selected future contract — pre-lock failure:** Before successful acquisition
-of the owned v2 lock, termination-unconfirmed returns its original failure and
-creates no sidecar, cleanup authority, or repository mutation. Only a failure
-after lock acquisition may attempt a sidecar bound to that exact lock.
+**Currently implemented private contract — pre-lock failure:** Before successful acquisition
+of the owned v2 lock, the build may establish authenticated ordinary `build`
+and `build/Release` directories. It returns the original failure, owns no lock
+carrier successfully, and creates no terminal sidecar, cleanup authority,
+staging directory, generated artifact, receipt, or promoted output. Empty
+directory establishment is not persistence, recovery, or cleanup authority.
+Only a failure after successful exact v2 lock acquisition may attempt a sidecar
+bound to that exact lock.
 
-**Selected future contract — carrier and path identity:** The persistent carrier
+**Currently implemented private contract — carrier and path identity:** The persistent carrier
 is exactly this pair under the authenticated fixed `build/Release` directory:
 
 ```text
@@ -2998,7 +3047,7 @@ planned generation and does not assert that the directory was created. A new
 build must collision-fail without adoption or mutation if either fixed carrier
 path already exists. An orphan sidecar never authorizes cleanup.
 
-**Selected future contract — exact v2 lock:** New builds create a record with
+**Currently implemented private contract — exact v2 lock:** New builds create a record with
 exactly this key order and logical shape:
 
 ```json
@@ -3018,7 +3067,7 @@ name and nonce have the displayed fixed lowercase-hex widths. No key may be
 missing, additional, or reordered. The lock remains `ACTIVE` and byte-immutable
 for its entire lifetime; no terminal state is appended or written into it.
 
-**Selected future contract — exact terminal sidecar:** The sidecar has exactly
+**Currently implemented private contract — exact terminal sidecar:** The sidecar has exactly
 this key order. An ordinary settled failure eligible for later explicit clean
 uses:
 
@@ -3065,7 +3114,7 @@ one of `SUBPROCESS_TIMEOUT`, `SUBPROCESS_STDOUT_LIMIT`,
 hostname, absolute path, process inventory, retry count, operator assertion,
 command, environment value, stdout, stderr, or arbitrary diagnostic string.
 
-**Selected future contract — exact bytes:** Each file independently contains
+**Currently implemented private contract — exact bytes:** Each file independently contains
 1 through 2,048 bytes inclusive and uses strict UTF-8 without a BOM, compact
 `JSON.stringify` encoding in the prescribed key order, and exactly one final
 LF. CR, embedded or additional LF, whitespace padding, alternate key order,
@@ -3073,18 +3122,19 @@ unknown fields, and trailing bytes are invalid. Parsing and canonical
 re-encoding with the final LF must reproduce the original bytes exactly. The
 2,048-byte bound does not admit any noncanonical alternative.
 
-**Selected future contract — monotonic write protocol:** The later
-implementation must:
+**Currently implemented private contract — monotonic write protocol:** The
+implementation:
 
-1. Require the fixed sidecar path absent, start the cooperating lease, and keep
+1. Require the fixed sidecar, final binary, and final receipt paths absent in an
+   authenticated read-only preflight, then start the cooperating lease and keep
    it open through every carrier-persistence attempt.
 2. Exclusively create the v2 lock with `open(..., "wx", 0o600)`, write its
    complete canonical buffer, call `FileHandle.sync()`, close it, authenticate
    its type and identity, read it back, decode it, and require exact-byte
    equality before normal build work continues.
-3. Recheck that the fixed sidecar remains absent after lock acquisition. A
-   collision preserves the new lock and all pre-existing evidence and fails
-   without overwrite or adoption.
+3. Recheck that the fixed sidecar, final binary, and final receipt remain absent
+   after lock acquisition. A collision preserves the new lock and all
+   pre-existing evidence and fails without overwrite or adoption.
 4. After every cleanup-permitting predicate is final, exclusively create one
    terminal sidecar with `wx`; write canonical bytes, call `sync`, close,
    authenticate type and identity, read back, bind every copied field to the
@@ -3108,14 +3158,26 @@ build retains `ACTIVE` rather than writing positive authority.
 termination. A successful build creates no sidecar. Clean and operators never
 create, rewrite, upgrade, or repair either carrier file.
 
-**Selected future contract — writer uncertainty:** If sidecar create, write,
+**Currently implemented private contract — writer uncertainty:** If sidecar create, write,
 `sync`, close, authentication, or readback fails, the failing build acts as
 `ACTIVE`: it retains the lock, every zero-length, partial, complete, or invalid
 sidecar subset, staging, binary, receipt, and every incomplete combination;
 performs no rollback, retry, rewrite, or deletion; preserves the original
 caller-visible build error; and does not claim that terminal evidence persisted.
 
-**Selected future contract — byte-authoritative positive publication:** A direct
+**Currently implemented private contract — cleanup-error precedence:** Cleanup
+planning, local cleanup execution, carrier publication, and acknowledgement
+failures never replace the original caller-visible build error. Their retained
+positive or negative terminal bytes keep the existing authority semantics in
+this section. In particular, a cleanup-planning termination failure may supply
+the causal fields of a retained negative sidecar while the build still returns
+the original error. After acknowledged positive publication, local cleanup is
+progressive and nontransactional in staging, sidecar, then lock order. A failure
+after sidecar removal leaves staging and sidecar absent and strands the canonical
+`ACTIVE` v2 lock. Only not-yet-removed state is promised retained; there is no
+atomic cleanup, rollback, recovery, retry, or success claim.
+
+**Currently implemented private contract — byte-authoritative positive publication:** A direct
 final-path `wx` write can leave complete canonical `CLEAN_AUTHORIZED` bytes even
 when the writer subsequently reports `sync`, close, authentication, or readback
 failure. The failing build still acts as `ACTIVE`, preserves all state, returns
@@ -3129,7 +3191,7 @@ identity-changed, or unbound bytes remain `ACTIVE` and non-authorizing. No
 additional carrier, commit bit, schema field, rename, or lock mutation is
 selected.
 
-**Selected future contract — legacy v1:** Every exact valid v1 lock remains
+**Currently implemented private contract — legacy v1:** Every exact valid v1 lock remains
 legacy indeterminate evidence. It is never migrated, rewritten, relabeled,
 adopted, or inferred from pipe or PID absence, process inventory, age,
 timestamps, staging or output shape, reboot, or current tests. A sidecar cannot
@@ -3138,7 +3200,7 @@ retention-required result and preserves any accompanying sidecar. An unknown or
 malformed lock version retains the existing lock-invalid behavior and preserves
 all evidence.
 
-**Selected future contract — clean precedence and identities:** Existing root,
+**Currently implemented private contract — clean precedence and identities:** Existing root,
 fixed-path, non-following type, containment, size, lock, staging, inventory, and
 identity safety authentication occurs without mutation and retains its existing
 errors. After that safety boundary:
@@ -3164,7 +3226,7 @@ retains existing idempotent clean success. Existing exact lockless successful
 binary/receipt cleanup remains available. Pipe absence means only that no
 cooperating listener answered once; it never supplies positive authority.
 
-**Selected future contract — exact authorized removal:** For an exact
+**Currently implemented private contract — exact authorized removal:** For an exact
 `CLEAN_AUTHORIZED` pair only, clean reauthenticates every removal identity and
 then physically removes the authenticated staging contents and staging
 directory, final binary if present, final receipt if present, disposition
@@ -3178,7 +3240,7 @@ removal leaves v2 `ACTIVE` without terminal authority and therefore requires
 indefinite retention. This intentional fail-closed interruption boundary is not
 resume or crash recovery.
 
-**Selected future contract — no operator-proof interface:**
+**Currently implemented private contract — no operator-proof interface:**
 The selected operator-proof or cleanup-authorization interface is exactly:
 
 ```text
@@ -3192,15 +3254,15 @@ assertion grants cleanup authority. Read-only investigation may inventory, hash,
 or forensically copy retained evidence, but cannot mutate its disposition or
 authorize removal.
 
-**Selected future contract — indefinite retention and crash behavior:** The
-exact future outcomes are:
+**Currently implemented private contract — indefinite retention and crash behavior:** The
+exact implemented outcomes are:
 
 | Retained state | Build or explicit-clean result |
 | --- | --- |
 | Live cooperating lease | Existing `MOXLEY_NATIVE_CLEAN_BUSY`; preserve everything. |
-| Ordinary pre-promotion handled failure after v2 lock acquisition | Persist and verify `CLEAN_AUTHORIZED` before build-owned cleanup; on success remove staging, sidecar, and lock in the authorized order. |
+| Ordinary pre-promotion handled failure after v2 lock acquisition | Persist and verify `CLEAN_AUTHORIZED` before build-owned cleanup; on success remove staging, sidecar, and lock in the authorized order. Planning, publication, or acknowledgement failure retains state under the carrier-failure rules and still returns the original build error. Once local cleanup begins, removal is progressive and nontransactional: only not-yet-removed state is promised retained, so failure after sidecar removal may leave staging and sidecar absent with the canonical `ACTIVE` v2 lock stranded. No atomic cleanup, recovery, retry, or success is claimed. |
 | Ordinary post-promotion settled failure | Persist `CLEAN_AUTHORIZED`, close the lease after the attempt, and preserve the exact carrier and generated state for explicit clean. |
-| Termination-unconfirmed before v2 lock acquisition | Return the original failure; create no sidecar, cleanup authority, or repository mutation. |
+| Any failure before successful v2 lock acquisition | Return the original failure; authenticated empty `build` and `build/Release` directories may remain, but no lock is successfully owned and no sidecar, cleanup authority, staging, artifact, receipt, or promoted output is created. |
 | Termination-unconfirmed after v2 lock acquisition | Attempt only `TERMINATION_UNCONFIRMED` while the lease remains open; close the lease after the attempt, return the original termination-unconfirmed error, and retain everything indefinitely. |
 | Crash or killed parent with v2 `ACTIVE` | `MOXLEY_NATIVE_CLEAN_RETENTION_REQUIRED`; pipe absence does not reclassify it. |
 | Exact valid v1 lock | `MOXLEY_NATIVE_CLEAN_RETENTION_REQUIRED`; no migration or inference. |
@@ -3240,8 +3302,9 @@ recovery, durability, traversal, persistence, database locking, a loader, PR
 **Currently implemented boundary:** The native-build harness uses the repaired
 bounded supervisor semantics and a 300,000 ms outer process bound. It reports
 the closed private codes and reasons from sections 76 through 79 rather than an
-unexplained `code: null`. The focused subprocess suite is 6/6 and the focused
-native build/clean lifecycle suite is 10/10.
+unexplained `code: null`. The previous packet's validated subprocess 6/6,
+native build/clean lifecycle 24/24, and full-suite 80/80 results do not validate
+this blocker repair; fresh ordered validation is required.
 
 **Blocked-candidate evidence:** The unchanged PR #28 loader harness still uses
 its separate historical 120,000 ms, 1 MiB-per-stream, direct-child-kill wrapper
@@ -3274,36 +3337,269 @@ harness changed to consume the repaired behavior.
 5. **Use taskkill tree termination plus bounded exit/close confirmation and
    fail closed when confirmation is unavailable — implemented source-free
    Windows subprocess policy.** PR #31 implements the bounded supervision in
-   sections 77 through 79. Its persistent cleanup consequence remains the
-   selected but unimplemented section 80 contract.
+   sections 77 through 79. The current four-path slice implements its section
+   80 persistent cleanup consequence, pending independent review and merge.
 6. **Introduce a native Job Object supervisor — deferred.** It creates a
    bootstrap/build dependency and requires a separate native contract.
 7. **Accept cooperative subprocess behavior without qualification — rejected
    for the build gate.** Natural termination is useful test evidence but not a
    cleanup guarantee.
 
-## 83. Documentation boundary and continuing no-go
+## 83. Implementation boundary and continuing no-go
 
-**Documentation-only Phase C boundary:** This documentation slice adds zero tests
-and changes only `STATE_COMPATIBILITY.md`. It changes no source, test, fixture,
-other document, manifest, lockfile, dependency, package version, generated
-output, build receipt, disposition carrier, or public API. The package remains
-`moxley-db@3.1.1` under Apache-2.0 with its existing dependency graph. Test
-counts remain subprocess 6/6, lifecycle 10/10, and full suite 66/66; those are
-preservation baselines and do not test unimplemented section 80 behavior.
+**Currently implemented boundary:** This isolated slice changes exactly the two
+private build/clean drivers, their existing lifecycle test file, and this
+document. It changes no fixture, other document, manifest, lockfile, dependency,
+package version, native source, or public API. The package remains
+`moxley-db@3.1.1` under Apache-2.0 with its existing dependency graph. Validated
+subprocess 6/6, lifecycle 24/24, and full-suite 80/80 results belong only to the
+previous packet. This blocker repair requires fresh separately authorized
+ordered validation.
 
 **Implemented-versus-selected boundary:** PR #31 implements sections 76 through
-79's private bounded subprocess supervision. Section 80's v2 lock, terminal
-sidecar, byte-authoritative positive publication, denial states, and retention
-rules remain selected future behavior. None of the section 80 enforcement is
-implemented. Fact, document-supported inference, selected policy, ambiguity,
-and explicit nonclaim remain separately labeled. No observation or primary-
-source statement is silently promoted into a stronger process-tree,
-termination, handle-lifetime, timing, cleanup, or PR #28 causation guarantee.
+79's private bounded subprocess supervision. The current four-path slice
+implements section 80's v2 lock, terminal sidecar, byte-authoritative positive
+publication, denial states, and retention rules. Fact, document-supported
+inference, selected policy, implementation status, ambiguity, and explicit
+nonclaim remain separately labeled. No observation or primary-source statement
+is silently promoted into a stronger process-tree, termination, handle-
+lifetime, timing, cleanup, or PR #28 causation guarantee.
 
 **Explicit nonclaim:** The complete Windows version-1 qualification remains
-**no-go**. This documentation does not authorize or claim implemented section
-80 enforcement, a merged private loader, production traversal, persisted-state
+**no-go**. The implemented section 80 boundary does not authorize or claim a
+merged private loader, production traversal, persisted-state
 acceptance, TOCTOU resistance, hostile-local-user resistance, distribution,
 release, npm publication, database locking, atomicity, rollback, recovery,
 durability, acknowledgement, migration, adapter behavior, or Thoth behavior.
+No production traversal, persistence, recovery, durability, database-locking,
+adapter, release, npm, or Thoth qualification is claimed by this repair.
+
+## 84. Owner-selected D1 physical-cleanup deferral
+
+**Controlling status boundary:** This section controls the owner-selected D1
+implementation in the isolated recovery worktree. Earlier descriptions in
+sections 80 through 83 of progressive production removal, final promotion,
+successful lockless-output removal, post-promotion handling, or a successful
+native build describe the historical pre-D1 packet and are superseded for this
+recovery-worktree implementation. They remain historical evidence only.
+
+The authoritative hosted `master` remains commit
+`b0bdd083fbc6a3a0f29651d1d2e3641756121f03`, subject
+`Define termination-unconfirmed cleanup authority contract (#32)`. Hosted
+`master` does not contain or publish this D1 implementation. The owner-selected
+implementation exists only as the current four-path unstaged packet on recovery
+branch `codex/moxley-termination-unconfirmed-cleanup-repair-recovery`, based on
+that same commit. It changes only this document, the two private Windows native
+drivers, and their existing lifecycle test file. It is neither a hosted change
+nor a canonical-checkout change.
+
+**Historical validation and blocking review:** Historical pre-D1 packet evidence
+recorded JSON parsing 2/2, JavaScript syntax 15/15, focused repair diagnostics
+3/3, subprocess 6/6, lifecycle 24/24, and aggregate test command 80/80.
+Immediately following that historical evidence, the independent final re-review
+was blocking: it identified original-error precedence and non-vacuous pre-lock
+coverage defects. Later focused repair evidence did not convert the historical
+packet into an independently accepted D1 packet. None of those historical
+counts validates the current D1 bytes.
+
+**Selected and implemented production rule:**
+
+```text
+PHYSICAL_CLEANUP_MUST_BE_DEFERRED
+```
+
+D1 provides no production physical-removal or promotion primitive. Both private
+production scripts contain zero calls matching
+`/\b(?:fsp|fs)\.(?:unlink|rmdir|rm|link|rename)\s*\(/`. Deleted production
+helpers and their obsolete private scenarios cannot be used to recover the
+former removal or final-promotion paths.
+
+A normally compiled native build authenticates the toolchain, creates and owns
+an exact v2 `ACTIVE` lock, compiles and links only into authenticated staging,
+authenticates and probes the staged addon, writes and authenticates the staged
+receipt, and then stops before final promotion. It attempts one exact,
+lock-bound `CLEAN_AUTHORIZED` sidecar with null `reason` and `causeReason`,
+retains staging, sidecar, and lock, leaves the final artifact and final receipt
+absent, closes the cooperating lease, and throws:
+
+```text
+MOXLEY_NATIVE_BUILD_PHYSICAL_CLEANUP_DEFERRED: Secure physical cleanup is unavailable; native build state was retained.
+```
+
+It never returns `status: "built"`. Every reachable primary build error retains
+exact object identity. Retention authentication, terminal publication,
+acknowledgement/readback, and lease-close rejection are secondary evidence only;
+they cannot replace the triggering error. Successful lease closure records
+`lease:close`, while rejected closure records `lease:close-rejected`.
+
+**D1 explicit-clean state matrix:**
+
+| Authenticated state | Exact result |
+| --- | --- |
+| Lock, sidecar, staging, artifact, and receipt all absent | `{ "status": "clean", "removed": [] }` |
+| Artifact only, receipt only, or artifact plus receipt without a lock | `MOXLEY_NATIVE_CLEAN_RETENTION_REQUIRED` |
+| Sidecar without an authenticated lock | `MOXLEY_NATIVE_CLEAN_DISPOSITION_INVALID` |
+| Staging without its authenticated lock | `MOXLEY_NATIVE_CLEAN_STAGE_INVALID` |
+| Exact legacy v1 lock | Existing retention-required result |
+| Exact active v2 lock without a terminal sidecar | Existing retention-required result |
+| Exact bound `TERMINATION_UNCONFIRMED` | Existing retention-required result |
+| Invalid, partial, noncanonical, unknown, orphaned, or unbound sidecar | Disposition-invalid result |
+| Active cooperating lease | `MOXLEY_NATIVE_CLEAN_BUSY` |
+| Exact authenticated, lock-bound `CLEAN_AUTHORIZED` | `MOXLEY_NATIVE_CLEAN_PHYSICAL_CLEANUP_DEFERRED` |
+
+The new positive clean error is exactly:
+
+```text
+MOXLEY_NATIVE_CLEAN_PHYSICAL_CLEANUP_DEFERRED: Secure physical cleanup is unavailable; native build state was retained.
+```
+
+The lockless-output retention error is exactly:
+
+```text
+MOXLEY_NATIVE_CLEAN_RETENTION_REQUIRED: Native build evidence requires retention; clean removal is not authorized.
+```
+
+For exact positive authority, clean authenticates the canonical root, `build`,
+and `build/Release` separately, reauthenticates the complete target map without
+following reparse objects, records no removal event, leaves every identity and
+byte unchanged, and stops at `defer:physical-cleanup`. Rebinding
+`build/Release`, the staging root, or a nested staging directory before or after
+authority fails with `MOXLEY_NATIVE_CLEAN_IDENTITY_CHANGED` and leaves external
+sentinels unchanged. Parsed carrier fields are validation inputs; repository-key
+and pipe expectations are derived independently from the canonical sandbox.
+
+**Isolated test containment:** Stateful execution of copied production build or
+clean scripts is confined to a newly registered, same-volume, direct OS-temp
+child named `moxley-section80-d1-mirror-*`. Each mirror authenticates fixed NTFS,
+the recovery/mirror drive and device binding, and an exclusive four-file ledger:
+`package.json`, both private scripts, and the native classifier source. No
+dependency tree, production root override, environment override, symlink, or
+public test mode is copied or added.
+
+Test-owned fixture teardown is not production cleanup authority. It applies only
+to a literal task-created and registered direct temp child under
+`moxley-native-build-test-*` or `moxley-section80-d1-mirror-*`, after task
+process and pipe absence, bounded no-follow inventory, allowlisted ordinary
+types, and per-descendant identity and reparse authentication. Hostile-junction
+fixtures authenticate and unlink only the junction object, verify the external
+target and sentinel, restore the moved ordinary directory, reauthenticate the
+ordinary topology, and only then invoke bounded recursive fixture teardown.
+This test-only disposal proves no production-safe deletion primitive.
+
+**Current exact-packet validation boundary:** D1 declares an expected lifecycle
+inventory of 32 tests, unchanged subprocess inventory of 6 tests, 9 test files,
+and aggregate inventory of 88 tests. This implementation record does not claim
+32/32 or 88/88 execution. Complete D1 validation and an independent final
+re-review remain pending and separately authorized. Only gate groups have fixed
+serial ordering; the full command is the aggregate test command.
+
+The pre-repair D1 implementation static gate passed its declared JSON 2/2,
+JavaScript syntax 15/15, test-file 9/9, lifecycle-declaration 32,
+subprocess-declaration 6, and aggregate-declaration 88 checks. It also found no
+`.only` or todo declaration, no prohibited production mutation call, no
+whitespace error, uniform CRLF in the four dirty files, four current Windows
+build pins and zero former pins, and the exact unchanged private clean-script
+hash. That static result did not execute or validate the lifecycle or aggregate
+inventories.
+
+The private phase diagnostic localized the D1 stall to the unawaited rejection
+from `deferBeforePromotion(state)`. That rejection bypassed the local
+`runBuild()` catch and left the cooperating lease server active. Earlier stalled
+supervisor receipts and earlier validation counts remain historical evidence
+only; they do not validate the current D1 bytes.
+
+The exact production behavioral repair is the awaited return already present in
+the protected build script:
+
+```js
+    return await deferBeforePromotion(state);
+```
+
+The intended handled path is catch entry, authenticated retention, canonical
+lock-bound `CLEAN_AUTHORIZED` publication, lease closure, original-error
+rethrow, and natural nonzero process exit. No promotion or physical cleanup
+occurs. The diagnostic controls remain private under `__test` and inert outside
+that boundary. Lifecycle 32/32, subprocess 6/6, aggregate 88/88, complete
+validation, and independent review remain unclaimed and separately authorized.
+
+**Qualification and nonclaims:** D1 implements zero-removal retention and
+physical-cleanup deferral only. It does not establish a successful production
+build, successful nonempty production clean, safe native deletion, persistence,
+recovery, durability, traversal, adapter qualification, npm qualification,
+publication, deployment, PR acceptance, or Thoth Track B. Isolated mirror
+compilation and test-owned teardown are containment evidence, not production
+cleanup or deployment evidence.
+
+
+## Section 80 Sprint 05 exact-host characterization refresh (2026-10-04)
+
+The execution predicate remains exact-host characterization policy (A). The
+current build target is Windows 11 Home 25H2, build `26200.9457`, `win32` /
+`x64`, fixed local NTFS. The earlier `26200.9168` observations above are
+historical; that build is no longer accepted by the current build driver.
+No other Windows build, edition, architecture, or filesystem is qualified by
+this refresh. Exact Node, ABI, signed compiler/linker, SDK, header and import
+library requirements remain unchanged. Host rejection reports the first
+mismatched field with bounded expected/actual values. It retains the same
+input-invalid error code and fails before lease or generated-state creation.
+
+The clean driver authenticates existing filesystem identity and ownership
+evidence without an independent OS-build pin; its source is unchanged. H1/H2,
+the expected physical-cleanup-deferral stderr, retention, lease, controller,
+identity algorithm, process/pipe bounds and physical cleanup are unchanged.
+Development regression evidence is distinct from clean qualification and D1
+measurement. Sprint 04 remains consumed and integration-invalid.
+
+
+## Section 80 canonical dual-channel observation contract (2026-10-05)
+
+Sprint 05 H1/H2 remain established route evidence. Sprint 07 attempt 1 remains
+`DUAL_CHANNEL_OBSERVATION_INTEGRATION_INVALID`; attempt 2 established
+`DUAL_CHANNEL_OBSERVATION_CONTRACT_VALIDATED` at the existing I8 boundary.
+Its two measured identities are consumed (2/2, zero retries). The historical
+raw process-global assertion failed under diagnostic pipe topology. This is
+preserved history; canonical assertion evolution does not relabel that failure.
+
+The ordinary repository test now carries the validated test-only observation
+and bounded relationship registry as inline factories. It preserves independent
+primitive-only immutable baseline, settled, I1, I2, I4 and I8 records. The
+original controller body retains eight immediate turns and reuses I8 for the
+terminal report. No observer adds native enumerations, timers or waits.
+
+Raw handle/request constructor summaries and positive constructor deltas remain
+reported separately from correctness. The measured I8 raw `Socket:2` is retained;
+no constructor-wide Socket exclusion or fixed Socket count replaces correctness.
+Only the exact registered process stdout/stderr references receive diagnostic
+transport ownership. Exact returned child streams and lease Server references
+carry workload provenance. Required unknown ownership, an invalid relationship
+registry or observation integration, and any workload handle/request remaining
+at I8 fail closed. An exact closed lease Server may transiently remain at the
+early samples; it must be absent at I8. The isolated ordinary fixture authenticates
+its lease identity independently of parsed records and checks restoration of its
+test-only wrappers. Production build and clean behavior remain unchanged.
+
+Request constructor counts and reference continuity are distinct. Same-class
+FSReqPromise A-to-B turnover can have zero positive count delta while A retires
+and B appears. Unknown early requests stay explicit and cannot manufacture an
+I8 leak once they retire. Every phase retains its contemporaneous lifecycle;
+later close/phase/counter changes cannot rewrite baseline. Relationship capacity
+128 applies to physical live occupancy, not lifetime registration churn. Target
+capacity remains 4. Optional rich identity degradation cannot erase the dual tier.
+
+The measured capture-complete assertion was a preservation harness sentinel.
+It was never in the restored canonical test and is not a production or ordinary
+test branch. Ordinary testing continues through the existing authenticated,
+bounded, task-owned fixture teardown. No measured output root, candidate package,
+authority hash or external evidence path is needed to execute `npm test`.
+
+The earlier 32/88 inventory and pending-validation statements above are
+historical packet boundaries. Current test counts and qualification are recorded
+in the separately authenticated final validation receipt; declarations alone do
+not establish a pass. Full canonical validation covers all nine package-listed
+test files, including the additional host and dual-channel regressions.
+
+`HISTORICAL_RAW_MIRROR_AVAILABILITY_UNRESOLVED` and
+`HISTORICAL_SERVER_ARTIFACT_QUARANTINED_UNLESS_REPRODUCED` remain. The current
+positively owned transient lease does not identify the older historical Server
+artifact. This integration establishes neither publication nor Thoth readiness;
+owner disposition and a separate review/commit/release checkpoint remain required.
