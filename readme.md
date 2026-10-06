@@ -31,6 +31,32 @@ var db = new DB(path).db
 
 > **Persistence status:** Current `master` is undergoing persistence hardening and is not a qualified release. Before reopening an existing database, review the [State Compatibility Policy](STATE_COMPATIBILITY.md).
 
+### Closing a database
+
+Keep the owning facade when you need to close a database:
+
+```javascript
+const Moxley = require("moxley-db");
+const moxley = new Moxley(path);
+await moxley.db._loadFromDir();
+// Read or write through moxley.db.
+await moxley.close();
+```
+
+Await active engine operations before closing. Busy close rejects with
+`MOXLEY_BUSY`; successful close invalidates the root and retained references,
+which then refuse operations with `MOXLEY_CLOSED`. Repeated successful close
+is idempotent. Close performs no persistent writes or durability flush. A new
+instance can reopen the same root after its awaited load. See
+[CLOSE_LIFECYCLE.md](CLOSE_LIFECYCLE.md) for original error-cause behavior.
+
+The 4.0.0 local candidate requires Node 16 or newer for runtime APIs; this is
+a compatibility change from the historical release. This package campaign
+qualifies Windows x64 with Node 24.13.0 only, not every runtime satisfying
+`engines`. The included test suite and optional native tooling have separate
+requirements; native build admission remains tied to its exact host/runtime
+contract. See [CHANGELOG.md](CHANGELOG.md) and [PACKAGING.md](PACKAGING.md).
+
 ### Storing and Retrieving Data
 #### Node Structure
 

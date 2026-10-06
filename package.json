@@ -1,12 +1,14 @@
 {
   "name": "moxley-db",
-  "version": "3.1.1",
+  "version": "4.0.0",
   "description": "A flexible class based database system for complicated schemas",
   "main": "index.js",
   "scripts": {
-    "test": "node --test test/load-readiness.test.cjs test/repeated-load-mutation.test.cjs test/duplicate-create.test.cjs test/restart-load-create.test.cjs test/child-state-preimage.test.cjs test/filesystem-capabilities.test.cjs test/windows-reparse-native.test.cjs test/windows-native-build.test.cjs test/windows-native-subprocess.test.cjs",
+    "test": "node --test test/load-readiness.test.cjs test/repeated-load-mutation.test.cjs test/duplicate-create.test.cjs test/restart-load-create.test.cjs test/child-state-preimage.test.cjs test/filesystem-capabilities.test.cjs test/windows-reparse-native.test.cjs test/windows-native-build.test.cjs test/windows-native-subprocess.test.cjs test/atomic-file-publication.test.cjs test/close-lifecycle.test.cjs",
     "build:native:windows": "node scripts/build-windows-native.cjs",
-    "clean:native:windows": "node scripts/clean-windows-native.cjs"
+    "clean:native:windows": "node scripts/clean-windows-native.cjs",
+    "test:package": "node --test test/package-artifact.test.cjs",
+    "test:runtime": "node --test test/load-readiness.test.cjs test/repeated-load-mutation.test.cjs test/duplicate-create.test.cjs test/restart-load-create.test.cjs test/child-state-preimage.test.cjs test/filesystem-capabilities.test.cjs test/windows-reparse-native.test.cjs test/windows-native-subprocess.test.cjs test/atomic-file-publication.test.cjs test/close-lifecycle.test.cjs"
   },
   "keywords": [
     "database",
@@ -19,5 +21,24 @@
   "license": "Apache-2.0",
   "dependencies": {
     "flatted": "^3.0.2"
-  }
+  },
+  "engines": {
+    "node": ">=16"
+  },
+  "files": [
+    "index.js",
+    "lib/",
+    "native/",
+    "scripts/",
+    "test/",
+    "readme.md",
+    "LICENSE",
+    "NOTICE",
+    "LICENSING.md",
+    "STATE_COMPATIBILITY.md",
+    "ATOMIC_FILE_PUBLICATION.md",
+    "CLOSE_LIFECYCLE.md",
+    "CHANGELOG.md",
+    "PACKAGING.md"
+  ]
 }
