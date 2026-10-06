@@ -8,6 +8,9 @@ const path = require('node:path');
 const { test } = require('node:test');
 
 const Moxley = require('..');
+// Keep the immutable native-mirror package manifest while including storage
+// publication regressions in the canonical npm test entry point.
+require('./atomic-file-publication.test.cjs');
 
 const WORKER_PATH = path.join(
   __dirname,

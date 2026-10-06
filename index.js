@@ -1,6 +1,7 @@
 var fs = require('fs');
 const path = require('path');
 const {parse, stringify} = require('flatted');
+const publishFile = require('./lib/atomic-file-publication.cjs');
 
 class DB { // DataBase (root node)
     constructor(loc) {
@@ -248,7 +249,7 @@ class DB { // DataBase (root node)
             state._childTemplate = this._childTemplate.toString()
         }
         var filename = this._loc + "_state.ms"
-        fs.writeFileSync(filename, stringify(state))
+        publishFile(filename, stringify(state))
     }
 
     async _loadState(loc) { // Loads a state file from loc and returns it as an object
@@ -456,7 +457,7 @@ class DC { // DataCollection
             state._accept = this._accept.toString()
         }
         var filename = this._loc + "_colstate.mc"
-        fs.writeFileSync(filename, stringify(state))
+        publishFile(filename, stringify(state))
     }
 
     async _loadState() {
@@ -564,7 +565,7 @@ const handler = {
         }
         if (typeof(arg) == "function" && !Reflect.has(obj, prop)) {
             var filename = loc + prop + ".mf"
-            fs.writeFileSync(filename, arg.toString())
+            publishFile(filename, arg.toString())
             var keys = Reflect.get(obj, "_keys")
             if (keys.indexOf(prop) == -1) {
                 keys.push(prop)
@@ -598,7 +599,7 @@ const handler = {
             if (arg) {
                 if (arg.constructor.name == "DN") {
                     var filename = loc + prop + ".ml"
-                    fs.writeFileSync(filename, arg._id)
+                    publishFile(filename, arg._id)
                     var keys = Reflect.get(obj, "_keys")
                     if (keys.indexOf(prop) == -1) {
                         keys.push(prop)
@@ -613,7 +614,7 @@ const handler = {
             }
         } else {
             var filename = loc + prop + ".md"
-            fs.writeFileSync(filename, stringify(arg))
+            publishFile(filename, stringify(arg))
             var keys = Reflect.get(obj, "_keys")
             if (keys.indexOf(prop) == -1) {
                 keys.push(prop)
