@@ -11,7 +11,7 @@ The highest prior npm release is 3.2.0. The successor requires Node 16 or newer
 for node-prefixed CommonJS builtins and crypto.randomUUID; earlier runtime
 compatibility is not preserved. This motivates a major version despite the
 additive close API and bug fixes. Qualification currently covers Windows x64,
-Node 24.13.0 and npm 11.12.1 only. No prior prerelease/tag convention was found;
+Node 24.13.0 and npm 11.6.2 only. No prior prerelease/tag convention was found;
 4.0.0 is an ordinary version held locally as a candidate.
 
 ### Runtime changes since 3.2.0

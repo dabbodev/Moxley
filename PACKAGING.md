@@ -35,7 +35,7 @@ consumer lock binds that tested dependency. The development lock remains the
 qualified source lock and is not a published dependency pin.
 
 The engines floor is a runtime prerequisite, not a qualification matrix. This
-campaign uses Windows x64, Node 24.13.0 and npm 11.12.1. Optional native tooling
+campaign uses Windows x64, Node 24.13.0 and npm 11.6.2. Optional native tooling
 retains its separate exact host/runtime admission. Package qualification does
 not establish durable storage, crash/resume, full OEWN loading, publication,
 remote release integrity or production admission.
