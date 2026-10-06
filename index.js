@@ -2,9 +2,11 @@ var fs = require('fs');
 const path = require('path');
 const {parse, stringify} = require('flatted');
 const publishFile = require('./lib/atomic-file-publication.cjs');
+const lifecycle = require('./lib/lifecycle.cjs');
 
 class DB { // DataBase (root node)
-    constructor(loc) {
+    constructor(loc, owner = undefined) {
+        lifecycle.attach(this, owner)
         this._loc = loc
         this._children = []
         this._id = "0"
@@ -328,7 +330,7 @@ class DN extends DB { // DataNode (extended root)
             name = data.name
         }
         var loc = parent._loc + (parent._children.length) + "/"
-        super(loc)
+        super(loc, parent)
         this._parent = parent
         this._root = parent._root
         this._id = parent._id + "/" + (parent._children.length)
@@ -356,6 +358,7 @@ class DN extends DB { // DataNode (extended root)
 
 class DC { // DataCollection
     constructor(parent, name, options={keySort: undefined, itemSort: undefined, indexBy: undefined, accept: undefined}) {
+        lifecycle.attach(this, parent)
         this._parent = parent
         this._root = parent._root
         this._name = name
@@ -371,7 +374,9 @@ class DC { // DataCollection
         if (!fs.existsSync(this._loc)){
             fs.mkdirSync(this._loc)
         } else {
-            this._loadState()
+            // The constructor cannot await; the shared lifecycle retains any
+            // original failure for close rather than detaching a rejection.
+            this._loadState().catch(() => {})
         }
     }
 
@@ -523,6 +528,7 @@ const handler = {
         })
     },
     get: function(obj, prop, arg) {
+        return lifecycle.run(obj, () => {
         var loc = Reflect.get(obj, "_loc")
         if (obj.constructor.name == "DC") {
             var numKeys = Reflect.get(obj, "_keys").length
@@ -551,8 +557,10 @@ const handler = {
             }
             return undefined
         }
+        })
     },
     set: function(obj, prop, arg) {
+        return lifecycle.run(obj, () => {
         var loc = Reflect.get(obj, "_loc")
         if (!fs.existsSync(loc)){
             fs.mkdirSync(loc)
@@ -631,14 +639,47 @@ const handler = {
             }
             return true
         }
+        })
+    },
+    defineProperty: function(obj, prop, descriptor) {
+        lifecycle.assertOpen(obj)
+        return Reflect.defineProperty(obj, prop, descriptor)
+    },
+    deleteProperty: function(obj, prop) {
+        lifecycle.assertOpen(obj)
+        return Reflect.deleteProperty(obj, prop)
+    },
+    ownKeys: function(obj) {
+        lifecycle.assertOpen(obj)
+        return Reflect.ownKeys(obj)
+    },
+    has: function(obj, prop) {
+        lifecycle.assertOpen(obj)
+        return Reflect.has(obj, prop)
+    },
+    getOwnPropertyDescriptor: function(obj, prop) {
+        lifecycle.assertOpen(obj)
+        return Reflect.getOwnPropertyDescriptor(obj, prop)
+    },
+    setPrototypeOf: function(obj, prototype) {
+        lifecycle.assertOpen(obj)
+        return Reflect.setPrototypeOf(obj, prototype)
+    },
+    preventExtensions: function(obj) {
+        lifecycle.assertOpen(obj)
+        return Reflect.preventExtensions(obj)
     }
 }
+
+lifecycle.guardPrototype(DB.prototype)
+lifecycle.guardPrototype(DC.prototype)
 
 class WillSmith {
     constructor(o, p, n=undefined) {
         let shadow = new DN(o, p, n)
 
         let proxy = new Proxy(shadow, handler)
+        lifecycle.attach(proxy, shadow)
 
         this.dn = proxy
     }
@@ -651,8 +692,14 @@ class Lizzo {
         let shadow = new DB(loc)
 
         let proxy = new Proxy(shadow, handler)
+        lifecycle.attach(proxy, shadow)
 
         this.db = proxy
+        lifecycle.attach(this, shadow)
+    }
+
+    close() { // Closes the owning database; refuses while engine work is active.
+        return lifecycle.close(this)
     }
 }
 
@@ -661,6 +708,7 @@ class Tupac {
         let shadow = new DC(p, n, o)
 
         let proxy = new Proxy(shadow, handler)
+        lifecycle.attach(proxy, shadow)
 
         this.dc = proxy
     }
